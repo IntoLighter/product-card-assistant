@@ -1,0 +1,16 @@
+[project]
+name = "product-card-assistant"
+version = "0.1.0"
+description = "AI-помощник для подготовки товарных карточек КИП (локальная LLM через vLLM, веб-интерфейс на Streamlit)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "openai>=3.45.0",
+    "pydantic>=2.14.2",
+    "python-dotenv>=1.2.4",
+    "streamlit>=1.66.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]

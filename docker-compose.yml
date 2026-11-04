@@ -1,0 +1,54 @@
+name: product-card-assistant   # явно: имя папки (кириллица) compose не принимает
+
+services:
+  vllm:
+    image: vllm/vllm-openai:${VLLM_IMAGE_TAG:-v0.28.0}
+    # Строковая форма: compose разбивает её на аргументы ПОСЛЕ подстановки,
+    # поэтому VLLM_EXTRA_ARGS может содержать несколько флагов
+    command: >-
+      --model=${VLLM_MODEL:-RedHatAI/Qwen3.5-4B-quantized.w4a16}
+      --served-model-name=${LLM_MODEL:-local-model}
+      --max-model-len=${VLLM_MAX_MODEL_LEN:-6144}
+      --gpu-memory-utilization=${VLLM_GPU_MEMORY_UTILIZATION:-0.85}
+      --reasoning-parser=qwen3
+      ${VLLM_EXTRA_ARGS---language-model-only}
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+    volumes:
+      - hf-cache:/root/.cache/huggingface   # модель скачивается один раз
+    ports:
+      - "8000:8000"
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 900s   # первая загрузка модели может занять долго
+    restart: unless-stopped
+
+  app:
+    build: .
+    environment:
+      - LLM_BASE_URL=http://vllm:8000/v1
+      - LLM_MODEL=${LLM_MODEL:-local-model}
+      - LLM_API_KEY=${LLM_API_KEY:-EMPTY}
+      - TEMPERATURE=${TEMPERATURE:-0.3}
+      - SEED=${SEED:-42}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-120}
+    ports:
+      - "8501:8501"
+    # Стартуем сразу: пока модель грузится, UI показывает статус, а не висит
+    depends_on:
+      - vllm
+    restart: unless-stopped
+
+volumes:
+  hf-cache:
