@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Секреты и локальный конфиг
+.env
+.streamlit/secrets.toml
+
+# Модели (несколько ГБ — скачиваются скриптом)
+models/
+*.gguf
+
+# IDE
+.vscode/
+.idea/
