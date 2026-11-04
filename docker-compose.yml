@@ -14,6 +14,8 @@ services:
       ${VLLM_EXTRA_ARGS---language-model-only}
     environment:
       - HF_TOKEN=${HF_TOKEN:-}
+      # Xet-загрузчик HF в контейнере под WSL2 зависает — качаем обычным HTTPS
+      - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
     volumes:
       - hf-cache:/root/.cache/huggingface   # модель скачивается один раз
     ports:
