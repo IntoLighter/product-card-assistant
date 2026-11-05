@@ -9,7 +9,8 @@ hooks = [
   { id = "end-of-file-fixer" },
   { id = "mixed-line-ending" },
   { id = "fix-byte-order-marker" },
-  { id = "pretty-format-json", args = ["--no-sort-keys", "--autofix"], exclude = '^\.vscode/' },
+  # --no-ensure-ascii: иначе кириллица в JSON превращается в \uXXXX
+  { id = "pretty-format-json", args = ["--no-sort-keys", "--no-ensure-ascii", "--autofix"], exclude = '^\.vscode/' },
 
   # Syntax
   { id = "check-json", exclude = '^\.vscode/' },
@@ -86,4 +87,13 @@ name = "ty check"
 entry = "uv run ty check"
 language = "system"
 types_or = ["python", "pyi"]
+pass_filenames = false
+
+[[repos.hooks]]
+id = "pytest"
+name = "pytest"
+entry = "uv run pytest -q"
+language = "system"
+# Шаблоны промптов тоже покрыты тестами
+files = '^(app/|tests/).*\.(py|txt)$'
 pass_filenames = false
