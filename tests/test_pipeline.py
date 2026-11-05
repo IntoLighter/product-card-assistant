@@ -1,73 +1,87 @@
 import pytest
-from conftest import make_draft
 
 from app.core.llm import LLMError, LLMOutputError
+from app.core.models import MISSING
 from app.core.pipeline import generate_card
-from app.core.render import to_markdown
-from app.core.schema import MISSING
+from tests.factories import FakeLLM, make_draft, manometer
 
 
-class FakeLLM:
-    """Отдаёт заготовленные ответы по очереди и запоминает запросы."""
+def test_card_combines_input_and_draft():
+    card = generate_card(manometer(), FakeLLM(make_draft()))
 
-    def __init__(self, *responses):
-        self.responses = list(responses)
-        self.calls: list[list[dict]] = []
-
-    def complete_json(self, messages, schema, attempt=0):
-        self.calls.append(messages)
-        item = self.responses.pop(0)
-        if isinstance(item, Exception):
-            raise item
-        return item.model_dump(), item.model_dump_json()
-
-
-def test_happy_path(manometer):
-    llm = FakeLLM(make_draft())
-    card = generate_card(manometer, llm)
-    assert card.meta["checks_passed"] and card.meta["attempts"] == 1
+    assert card.meta.checks_passed
+    assert card.meta.attempts == 1
+    assert card.meta.llm_model == "fake-llm"
+    assert card.seo_title == make_draft().seo_title
     # Характеристики — из входа, без участия модели
-    values = {s.name: s.value for s in card.specs}
-    assert values["класс точности"] == "1,5"
+    values = {spec.name: spec.value for spec in card.specs}
     assert values["Производитель"] == "Манотомь"
-    assert "## Ключевые характеристики" in to_markdown(card)
+    assert values["класс точности"] == "1,5"
 
 
-def test_missing_specs_marked(manometer):
-    card = generate_card(manometer, FakeLLM(make_draft()))
-    missing = [s for s in card.specs if s.source == "missing"]
-    assert missing and all(s.value == MISSING for s in missing)
-    assert any("Измеряемая среда" in c for c in card.needs_clarification)
+def test_missing_specs_marked():
+    card = generate_card(manometer(), FakeLLM(make_draft()))
+
+    missing = [spec for spec in card.specs if spec.is_missing]
+    assert [spec.name for spec in missing] == ["Измеряемая среда", "Температура рабочей среды"]
+    assert all(spec.value == MISSING for spec in missing)
+    assert f"Измеряемая среда: {MISSING}" in card.needs_clarification
 
 
-def test_retry_with_feedback(manometer):
+def test_input_gaps_and_model_notes_in_clarifications():
+    raw = manometer()
+    raw["manufacturer"] = ""
+    raw["warehouse"] = "Москва"
+    draft = make_draft(clarifications=["Уточнить материал корпуса", "Не указан производитель", "измеряемая среда"])
+
+    card = generate_card(raw, FakeLLM(draft))
+
+    assert card.manufacturer == MISSING
+    assert card.specs[0].is_missing
+    # Без дублей от модели: ни производителя, ни недостающего поля, уже добавленного кодом
+    assert card.needs_clarification.count("Не указан производитель.") == 1
+    assert "измеряемая среда" not in card.needs_clarification
+    assert "Уточнить материал корпуса" in card.needs_clarification
+    assert card.ignored_fields == ["warehouse"]
+
+
+def test_retry_sends_check_feedback():
     llm = FakeLLM(make_draft(seo_description="Слишком коротко."), make_draft())
-    card = generate_card(manometer, llm)
-    assert card.meta["attempts"] == 2 and card.meta["checks_passed"]
-    fix_message = llm.calls[1][-1]["content"]
-    assert "SEO-описание" in fix_message  # модели передали конкретное замечание
+
+    card = generate_card(manometer(), llm)
+
+    assert card.meta.attempts == 2
+    assert card.meta.checks_passed
+    assert llm.attempts == [0, 1]  # seed сдвигается между попытками
+    retry = llm.calls[1]
+    assert retry[-2]["role"] == "assistant"
+    assert "SEO-описание" in str(retry[-1]["content"])
 
 
-def test_unfixed_problems_shown_to_manager(manometer):
-    bad = make_draft(seo_title="М" * 80)
-    card = generate_card(manometer, FakeLLM(bad, bad, bad))
-    assert not card.meta["checks_passed"]
-    assert any(i.field == "seo_title" for i in card.issues)
+def test_best_draft_kept_when_problems_remain():
+    one_problem = make_draft(seo_title="М" * 80)
+    two_problems = make_draft(seo_title="М" * 80, seo_description="Коротко.")
+
+    card = generate_card(manometer(), FakeLLM(one_problem, two_problems, two_problems))
+
+    assert card.meta.attempts == 3
+    assert not card.meta.checks_passed
+    assert [warning.field for warning in card.check_warnings] == ["seo_title"]
 
 
-def test_invalid_output_retried(manometer):
-    card = generate_card(manometer, FakeLLM(LLMOutputError("не JSON"), make_draft()))
-    assert card.meta["attempts"] == 2
+def test_invalid_output_is_retried():
+    card = generate_card(manometer(), FakeLLM(LLMOutputError("не JSON"), make_draft()))
+    assert card.meta.attempts == 2
 
 
-def test_all_attempts_invalid(manometer):
+def test_all_attempts_invalid():
     llm = FakeLLM(*[LLMOutputError("не JSON")] * 3)
-    with pytest.raises(LLMError):
-        generate_card(manometer, llm)
+    with pytest.raises(LLMError, match="3 попыток"):
+        generate_card(manometer(), llm)
 
 
-def test_connection_error_not_retried(manometer):
+def test_connection_error_not_retried():
     llm = FakeLLM(LLMError("нет связи"), make_draft())
     with pytest.raises(LLMError, match="нет связи"):
-        generate_card(manometer, llm)
+        generate_card(manometer(), llm)
     assert len(llm.calls) == 1

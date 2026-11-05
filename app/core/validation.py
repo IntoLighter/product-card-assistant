@@ -1,87 +1,108 @@
-"""Разбор и проверка входных данных. Ошибки — понятным языком, без трейсбеков."""
+"""
+Разбор и нормализация входных данных.
+
+Если карточку собрать нельзя (некорректный JSON, нет названия), бросается
+InputError с понятным текстом. Пробелы в данных ошибкой не считаются: они
+возвращаются списком и попадают в карточку как «требует уточнения».
+"""
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
-from .schema import Issue, ProductInput
+from .models import Issue, ProductInput
 
-KNOWN_FIELDS = {"name", "manufacturer", "specs", "description"}
+KNOWN_FIELDS = frozenset({"name", "manufacturer", "specs", "description"})
+
+type RawProduct = dict[str, Any]
 
 
 class InputError(Exception):
-    """Вход нельзя обработать (некорректный JSON, нет названия и т.п.)."""
+    """Входные данные нельзя обработать."""
 
 
-def parse_json(text: str) -> list[dict]:
-    """Строка -> список товаров. Принимает один объект или массив объектов."""
-    if not text or not text.strip():
+@dataclass(frozen=True)
+class ParsedProduct:
+    """Нормализованный товар и всё, что о входе стоит сообщить пользователю."""
+
+    product: ProductInput
+    gaps: list[Issue]
+    ignored_fields: list[str]
+
+
+def parse_json(text: str) -> list[RawProduct]:
+    """Текст JSON -> список товаров. Принимает один объект или массив объектов."""
+    if not text.strip():
         raise InputError("Пустой ввод: вставьте JSON с данными о товаре.")
     try:
         data = json.loads(text)
-    except json.JSONDecodeError as e:
-        raise InputError(f"Некорректный JSON: {e.msg} (строка {e.lineno}, столбец {e.colno}).") from e
+    except json.JSONDecodeError as error:
+        raise InputError(f"Некорректный JSON: {error.msg} (строка {error.lineno}, столбец {error.colno}).") from error
 
     items = data if isinstance(data, list) else [data]
     if not items:
         raise InputError("Пустой массив: нет ни одного товара.")
-    for i, item in enumerate(items, 1):
+    for number, item in enumerate(items, start=1):
         if not isinstance(item, dict):
-            where = f"Элемент №{i}" if isinstance(data, list) else "Корень JSON"
+            where = f"Элемент №{number}" if isinstance(data, list) else "Корень JSON"
             raise InputError(f"{where} должен быть объектом {{...}}, а не {type(item).__name__}.")
     return items
 
 
-def _clean_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, (list, tuple)):
-        value = ", ".join(str(v).strip() for v in value if str(v).strip())
-    text = str(value).strip()
-    return text or None
-
-
-def normalize_product(raw: dict) -> tuple[ProductInput, list[Issue]]:
-    """Сырой dict -> ProductInput + замечания о неполных данных."""
-    if not isinstance(raw, dict):
-        raise InputError("Данные о товаре должны быть JSON-объектом.")
-    issues: list[Issue] = []
-
-    name = _clean_str(raw.get("name"))
-    if not name:
+def normalize_product(raw: RawProduct) -> ParsedProduct:
+    """Сырой объект товара -> нормализованные данные и список пробелов в них."""
+    name = _to_text(raw.get("name"))
+    if name is None:
         raise InputError("Не заполнено обязательное поле «name» (название товара).")
 
-    manufacturer = _clean_str(raw.get("manufacturer"))
-    if not manufacturer:
-        issues.append(Issue(level="warning", field="manufacturer", message="Не указан производитель."))
+    gaps: list[Issue] = []
+    manufacturer = _to_text(raw.get("manufacturer"))
+    if manufacturer is None:
+        gaps.append(Issue(field="manufacturer", message="Не указан производитель."))
+    description = _to_text(raw.get("description"))
+    if description is None:
+        gaps.append(
+            Issue(field="description", message="Нет текстового описания: текст построен только на характеристиках.")
+        )
+    specs, spec_gaps = _parse_specs(raw.get("specs"))
 
-    description = _clean_str(raw.get("description"))
-    if not description:
-        issues.append(Issue(level="warning", field="description",
-                            message="Нет текстового описания — текст будет построен только на характеристиках."))
+    return ParsedProduct(
+        product=ProductInput(name=name, manufacturer=manufacturer, specs=specs, description=description),
+        gaps=[*gaps, *spec_gaps],
+        ignored_fields=sorted(raw.keys() - KNOWN_FIELDS),
+    )
 
-    specs_raw = raw.get("specs")
+
+def _parse_specs(raw_specs: object) -> tuple[dict[str, str], list[Issue]]:
+    if raw_specs is None or raw_specs == {}:
+        return {}, [Issue(field="specs", message="Не переданы характеристики (specs).")]
+    if not isinstance(raw_specs, dict):
+        raise InputError('Поле «specs» должно быть объектом вида {"характеристика": "значение"}.')
+
     specs: dict[str, str] = {}
-    if specs_raw is None or specs_raw == {}:
-        issues.append(Issue(level="warning", field="specs", message="Не переданы характеристики (specs)."))
-    elif not isinstance(specs_raw, dict):
-        raise InputError("Поле «specs» должно быть объектом вида {\"характеристика\": \"значение\"}.")
+    gaps: list[Issue] = []
+    for raw_name, raw_value in raw_specs.items():
+        name = _to_text(raw_name)
+        if name is None:
+            continue
+        value = _to_text(raw_value)
+        if value is None:
+            gaps.append(Issue(field=f"specs.{name}", message=f"Пустое значение характеристики «{name}»."))
+        else:
+            specs[name] = value
+    return specs, gaps
+
+
+def _to_text(value: object) -> str | None:
+    """Значение из JSON -> непустая строка без крайних пробелов или None."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        text = "; ".join(f"{key}: {item}" for key, item in value.items())
+    elif isinstance(value, list | tuple):
+        text = ", ".join(part for item in value if (part := str(item).strip()))
     else:
-        for key, value in specs_raw.items():
-            key_clean = _clean_str(key)
-            if not key_clean:
-                continue
-            if isinstance(value, dict):
-                value = "; ".join(f"{k}: {v}" for k, v in value.items())
-            value_clean = _clean_str(value)
-            if value_clean is None:
-                issues.append(Issue(level="warning", field=f"specs.{key_clean}",
-                                    message=f"Пустое значение характеристики «{key_clean}»."))
-                continue
-            specs[key_clean] = value_clean
-
-    for key in raw.keys() - KNOWN_FIELDS:
-        issues.append(Issue(level="info", field=str(key), message=f"Поле «{key}» не используется и проигнорировано."))
-
-    return ProductInput(name=name, manufacturer=manufacturer, specs=specs, description=description), issues
+        text = str(value)
+    return text.strip() or None

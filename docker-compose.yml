@@ -1,7 +1,8 @@
-name: product-card-assistant   # явно: имя папки (кириллица) compose не принимает
+name: product-card-assistant
 
 services:
   vllm:
+    container_name: vllm
     image: vllm/vllm-openai:${VLLM_IMAGE_TAG:-v0.28.0}
     # Строковая форма: compose разбивает её на аргументы ПОСЛЕ подстановки,
     # поэтому VLLM_EXTRA_ARGS может содержать несколько флагов
@@ -10,6 +11,7 @@ services:
       --served-model-name=${LLM_MODEL:-local-model}
       --max-model-len=${VLLM_MAX_MODEL_LEN:-6144}
       --gpu-memory-utilization=${VLLM_GPU_MEMORY_UTILIZATION:-0.85}
+      --max-num-seqs=${VLLM_MAX_NUM_SEQS:-8}
       --reasoning-parser=qwen3
       ${VLLM_EXTRA_ARGS---language-model-only}
     environment:
@@ -17,17 +19,11 @@ services:
       # Xet-загрузчик HF в контейнере под WSL2 зависает — качаем обычным HTTPS
       - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
     volumes:
-      - hf-cache:/root/.cache/huggingface   # модель скачивается один раз
+      - hf-cache:/root/.cache/huggingface
     ports:
       - "8000:8000"
     ipc: host
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    gpus: all
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 15s
@@ -37,6 +33,7 @@ services:
     restart: unless-stopped
 
   app:
+    container_name: app
     build: .
     environment:
       - LLM_BASE_URL=http://vllm:8000/v1
@@ -46,8 +43,7 @@ services:
       - SEED=${SEED:-42}
       - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-120}
     ports:
-      - "8501:8501"
-    # Стартуем сразу: пока модель грузится, UI показывает статус, а не висит
+      - "80:8501"
     depends_on:
       - vllm
     restart: unless-stopped

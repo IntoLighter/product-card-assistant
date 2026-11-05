@@ -1,4 +1,5 @@
-"""Пакетная генерация карточек из JSON-файлов.
+"""
+Пакетная генерация карточек из JSON-файлов.
 
     uv run python -m app.cli examples/*.json --out examples/output
 """
@@ -6,10 +7,12 @@
 from __future__ import annotations
 
 import argparse
-import glob
+import io
 import logging
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from app.core.config import Settings
 from app.core.llm import LLMError, OpenAICompatibleClient
@@ -17,58 +20,107 @@ from app.core.pipeline import generate_card
 from app.core.render import to_json, to_markdown
 from app.core.validation import InputError, parse_json
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Черновики карточек товаров КИП из JSON")
-    parser.add_argument("inputs", nargs="+", help="JSON-файлы (объект или массив товаров)")
-    parser.add_argument("--out", default="examples/output", help="папка для .md и .json")
-    parser.add_argument("-v", "--verbose", action="store_true")
-    args = parser.parse_args()
+    from app.core.llm import LLMClient
+    from app.core.validation import RawProduct
+
+EXIT_OK = 0
+EXIT_HAS_FAILURES = 1
+EXIT_LLM_UNAVAILABLE = 2
+
+GLOB_CHARS = frozenset("*?[")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    _use_utf8_console()  # до argparse: иначе кириллица в --help выводится кракозябрами
+    args = _parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(message)s")
-
-    # Windows-консоль: кириллица без кракозябр
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
 
     settings = Settings.from_env()
     llm = OpenAICompatibleClient(settings)
-    ok, status = llm.health()
-    if not ok:
-        print(f"[ошибка] {status}")
-        return 2
+    status = llm.check_server()
+    if not status.ready:
+        print(f"[ошибка] {status.message}")
+        return EXIT_LLM_UNAVAILABLE
 
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    files = [p for pattern in args.inputs for p in (glob.glob(pattern) or [pattern])]
-    failed = 0
+    args.out.mkdir(parents=True, exist_ok=True)
+    runner = BatchRunner(llm=llm, out_dir=args.out, max_attempts=settings.max_attempts)
+    for path in expand_patterns(args.inputs):
+        runner.run_file(path)
+    return EXIT_HAS_FAILURES if runner.failures else EXIT_OK
 
-    for path in map(Path, files):
+
+@dataclass
+class BatchRunner:
+    """Обрабатывает файлы по одному и считает неудачи, не прерываясь на первой."""
+
+    llm: LLMClient
+    out_dir: Path
+    max_attempts: int
+    failures: int = 0
+
+    def run_file(self, path: Path) -> None:
         try:
-            items = parse_json(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError) as e:
-            print(f"[ошибка] {path}: не удалось прочитать файл ({e})")
-            failed += 1
-            continue
-        except InputError as e:
-            print(f"[ошибка] {path}: {e}")
-            failed += 1
-            continue
+            products = parse_json(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError) as error:
+            self._fail(str(path), f"не удалось прочитать файл ({error})")
+            return
+        except InputError as error:
+            self._fail(str(path), str(error))
+            return
 
-        for i, raw in enumerate(items, 1):
-            stem = path.stem if len(items) == 1 else f"{path.stem}_{i}"
-            try:
-                card = generate_card(raw, llm, settings.max_attempts, settings.model)
-            except (InputError, LLMError) as e:
-                print(f"[ошибка] {stem}: {e}")
-                failed += 1
-                continue
-            (out_dir / f"{stem}.md").write_text(to_markdown(card), encoding="utf-8")
-            (out_dir / f"{stem}.json").write_text(to_json(card), encoding="utf-8")
-            mark = "ok" if card.meta["checks_passed"] else "есть замечания"
-            print(f"[{mark}] {stem}: заголовок {card.meta['seo_title_length']} симв., "
-                  f"описание {card.meta['seo_description_length']} симв., попыток {card.meta['attempts']}")
+        for number, raw in enumerate(products, start=1):
+            stem = path.stem if len(products) == 1 else f"{path.stem}_{number}"
+            self._run_product(raw, stem)
 
-    return 1 if failed else 0
+    def _run_product(self, raw: RawProduct, stem: str) -> None:
+        try:
+            card = generate_card(raw, self.llm, max_attempts=self.max_attempts)
+        except (InputError, LLMError) as error:
+            self._fail(stem, str(error))
+            return
+
+        (self.out_dir / f"{stem}.md").write_text(to_markdown(card), encoding="utf-8")
+        (self.out_dir / f"{stem}.json").write_text(to_json(card), encoding="utf-8")
+        verdict = "ok" if card.meta.checks_passed else "есть замечания"
+        print(
+            f"[{verdict}] {stem}: заголовок {card.meta.seo_title_length} симв., "
+            f"описание {card.meta.seo_description_length} симв., попыток {card.meta.attempts}"
+        )
+
+    def _fail(self, where: str, message: str) -> None:
+        self.failures += 1
+        print(f"[ошибка] {where}: {message}")
+
+
+def expand_patterns(patterns: Sequence[str]) -> list[Path]:
+    """Раскрывает маски вида examples/*.json: PowerShell, в отличие от bash, сам их не раскрывает."""
+    paths: list[Path] = []
+    for pattern in patterns:
+        path = Path(pattern)
+        if GLOB_CHARS.isdisjoint(path.name):
+            paths.append(path)
+        else:
+            # Если по маске ничего нет, оставляем её как есть: чтение файла сообщит об ошибке
+            paths.extend(sorted(path.parent.glob(path.name)) or [path])
+    return paths
+
+
+def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="product-cards", description="Черновики карточек товаров КИП из JSON")
+    parser.add_argument("inputs", nargs="+", help="JSON-файлы или маски (объект или массив товаров в файле)")
+    parser.add_argument("--out", type=Path, default=Path("examples/output"), help="папка для .md и .json")
+    parser.add_argument("-v", "--verbose", action="store_true", help="подробный лог генерации")
+    return parser.parse_args(argv)
+
+
+def _use_utf8_console() -> None:
+    """Windows: при выводе в канал кодировка по умолчанию не UTF-8, и кириллица ломается."""
+    for stream in (sys.stdout, sys.stderr):  # stderr — для логов
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8")
 
 
 if __name__ == "__main__":
