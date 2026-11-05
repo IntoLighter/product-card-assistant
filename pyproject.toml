@@ -1,3 +1,9 @@
+# Пакет app ставится в окружение (editable), поэтому `import app...`
+# работает одинаково из Streamlit, CLI, тестов и Docker
+[build-system]
+build-backend = "hatchling.build"
+requires = [ "hatchling" ]
+
 [project]
 name = "product-card-assistant"
 version = "0.1.0"
@@ -15,17 +21,30 @@ product-cards = "app.cli:main"
 
 [dependency-groups]
 dev = [
+    "prek>=0.5.10",
+    "pyproject-fmt>=2.30.3",
     "pytest>=9.2.0",
+    "ruff>=0.15.20",
+    "rumdl>=0.3.2",
+    "ty>=0.0.96",
 ]
 
-# Пакет app ставится в окружение (editable), поэтому `import app...`
-# работает одинаково из Streamlit, CLI, тестов и Docker
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = [ "app" ]
+
+[tool.ruff.lint]
+select = [ "ALL" ]
+ignore = [ "ANN401", "COM812", "D1", "D200", "D202", "D203", "D212", "RET504", "RUF001", "RUF002", "RUF003" ]
+
+[tool.pyproject-fmt]
+indent = 4
+keep_full_version = true
+generate_python_version_classifiers = false
+table_format = "long"
+sub_table_spacing = "\n"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = [ "tests" ]
+
+[tool.rumdl]
+disable = [ "MD013" ]
