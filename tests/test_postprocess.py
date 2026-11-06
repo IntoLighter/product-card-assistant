@@ -1,7 +1,10 @@
-from app.core.postprocess import fit_description, fit_draft
-from tests.factories import make_draft
+from core.postprocess import fit_description, fit_draft
+from factories import make_draft
 
-SENTENCE = "Прибор показывает избыточное давление на месте установки и не требует питания."  # 79 символов
+# 79 символов
+SENTENCE = (
+    "Прибор показывает избыточное давление на месте установки и не требует питания."
+)
 
 
 def paragraphs(count, sentences_each):

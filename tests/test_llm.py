@@ -3,19 +3,37 @@ import openai
 import pytest
 from openai.types.chat import ChatCompletion
 
-from app.core.config import Settings
-from app.core.llm import LLMOutputError, describe_api_error, parse_response
-from app.core.models import LLMDraft
-from tests.factories import make_draft
+from core.config import Settings
+from core.llm import LLMOutputError, describe_api_error, parse_response
+from core.models import LLMDraft
+from factories import make_draft
 
-SETTINGS = Settings(base_url="http://vllm:8000/v1", model="local-model")
+SETTINGS = Settings(
+    base_url="http://vllm:8000/v1",
+    model="local-model",
+    api_key="EMPTY",
+    temperature=0.3,
+    seed=42,
+    timeout=120,
+    max_attempts=3,
+)
 REQUEST = httpx2.Request("POST", "http://vllm:8000/v1/chat/completions")
 
 
 def completion(content, finish_reason="stop", *, choices=True):
-    choice = {"index": 0, "finish_reason": finish_reason, "message": {"role": "assistant", "content": content}}
+    choice = {
+        "index": 0,
+        "finish_reason": finish_reason,
+        "message": {"role": "assistant", "content": content},
+    }
     return ChatCompletion.model_validate(
-        {"id": "1", "object": "chat.completion", "created": 0, "model": "m", "choices": [choice] if choices else []}
+        {
+            "id": "1",
+            "object": "chat.completion",
+            "created": 0,
+            "model": "m",
+            "choices": [choice] if choices else [],
+        }
     )
 
 

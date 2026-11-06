@@ -5,31 +5,32 @@
 
 1. формат — длины текстов и число поисковых запросов из ТЗ;
 2. факты — каждое число в текстах должно встречаться во входных данных,
-   а «рискованные» сведения (ГОСТ, IP, поверка и т. п.) допустимы, только если они есть во входе.
+   а «рискованные» сведения (ГОСТ, IP, поверка и т. п.) допустимы,
+   только если они есть во входе.
 
-Найденные проблемы отправляются модели на исправление, а те, что остались, показываются контент-менеджеру.
+Найденные проблемы отправляются модели на исправление,
+а те, что остались, показываются контент-менеджеру.
 """
 
-from __future__ import annotations
-
 import re
-from typing import TYPE_CHECKING, NamedTuple
+from typing import NamedTuple
 
-from .models import (
+from core.models import (
     DESCRIPTION_MAX_LEN,
     DESCRIPTION_MIN_LEN,
     DESCRIPTION_TARGET_LEN,
     QUERIES_MAX,
     QUERIES_MIN,
     TITLE_MAX_LEN,
+    Commercial,
     Issue,
+    LLMDraft,
+    ProductInput,
 )
 
-if TYPE_CHECKING:
-    from .models import Commercial, LLMDraft, ProductInput
-
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
-# Средняя длина предложения в описаниях (15–20 слов): чтобы пересчитать символы в предложения
+# Средняя длина предложения в описаниях (15–20 слов):
+# чтобы пересчитать символы в предложения
 CHARS_PER_SENTENCE = 120
 
 
@@ -42,17 +43,21 @@ def _term(label: str, pattern: str, flags: re.RegexFlag = re.IGNORECASE) -> Risk
     return RiskyTerm(label, re.compile(pattern, flags))
 
 
-# Сведения, которые модели склонны «додумывать». Допустимы, только если есть во входных данных.
+# Сведения, которые модели склонны «додумывать».
+# Допустимы, только если есть во входных данных.
 RISKY_TERMS: tuple[RiskyTerm, ...] = (
     _term("ГОСТ", r"гост"),
     # Регистр важен: «ту» — ещё и местоимение («выполняет ту же задачу»)
     _term("ТУ", r"(?<!\w)ТУ(?!\w)", flags=re.NOFLAG),
     _term("степень защиты IP", r"(?<![a-z])ip\s?-?\d"),
     _term("взрывозащита", r"взрыво"),
-    _term("Ex-исполнение", r"(?<![A-Za-zА-Яа-яЁё])Ex(?![A-Za-zА-Яа-яЁё])", flags=re.NOFLAG),
+    _term(
+        "Ex-исполнение", r"(?<![A-Za-zА-Яа-яЁё])Ex(?![A-Za-zА-Яа-яЁё])", flags=re.NOFLAG
+    ),
     _term("Госреестр СИ", r"госреестр|реестр си"),
     _term("сертификация", r"сертифи"),
-    # Только существительное: «гарантирует точность» — оборот речи, а не обещание гарантии
+    # Только существительное: «гарантирует точность» — оборот речи,
+    # а не обещание гарантии
     _term("гарантия", r"гаранти(?:я|и|ю|ей|йн)"),
     _term("поверка", r"поверк|поверен"),
     _term("цифровой интерфейс", r"rs-?485|modbus|hart"),
@@ -81,7 +86,8 @@ def _check_title(title: str) -> list[Issue]:
         return [
             Issue(
                 field="seo_title",
-                message=f"SEO-заголовок {length} символов, нужно не более {TITLE_MAX_LEN}. "
+                message=f"SEO-заголовок {length} символов, "
+                f"нужно не более {TITLE_MAX_LEN}. "
                 f"Сократи его минимум на {excess} символов.",
             )
         ]
@@ -89,20 +95,28 @@ def _check_title(title: str) -> list[Issue]:
 
 
 def _check_description(description: str) -> list[Issue]:
-    # Символы модель считать не умеет, а предложения — умеет: подсказку даём в предложениях
+    # Символы модель считать не умеет, а предложения — умеет:
+    # подсказку даём в предложениях
     length = len(description.strip())
     if length < DESCRIPTION_MIN_LEN:
         sentences = _sentences_for(DESCRIPTION_TARGET_LEN - length)
         advice = (
-            f"Добавь ещё {sentences} по 15–20 слов: раскрой назначение, что дают характеристики из данных "
-            "на практике и где применяется прибор. Новых чисел и свойств не добавляй."
+            f"Добавь ещё {sentences} по 15–20 слов: раскрой назначение, "
+            "что дают характеристики из данных на практике и где применяется прибор. "
+            "Новых чисел и свойств не добавляй."
         )
     elif length > DESCRIPTION_MAX_LEN:
-        advice = f"Убери {_sentences_for(length - DESCRIPTION_TARGET_LEN)}, остальное сохрани."
+        excess = _sentences_for(length - DESCRIPTION_TARGET_LEN)
+        advice = f"Убери {excess}, остальное сохрани."
     else:
         return []
     norm = f"нужно {DESCRIPTION_MIN_LEN}–{DESCRIPTION_MAX_LEN}"
-    return [Issue(field="seo_description", message=f"SEO-описание {length} символов, {norm}. {advice}")]
+    return [
+        Issue(
+            field="seo_description",
+            message=f"SEO-описание {length} символов, {norm}. {advice}",
+        )
+    ]
 
 
 def _check_queries(queries: list[str]) -> list[Issue]:
@@ -112,7 +126,8 @@ def _check_queries(queries: list[str]) -> list[Issue]:
     return [
         Issue(
             field="search_queries",
-            message=f"Непустых поисковых запросов {count}, нужно {QUERIES_MIN}–{QUERIES_MAX}.",
+            message=f"Непустых поисковых запросов {count}, "
+            f"нужно {QUERIES_MIN}–{QUERIES_MAX}.",
         )
     ]
 
@@ -125,7 +140,8 @@ def _check_commercial(commercial: Commercial) -> list[Issue]:
     return [
         Issue(
             field="commercial",
-            message="Commercial-блок заполнен не полностью: нужны аудитория, задачи и короткий питч.",
+            message="Commercial-блок заполнен не полностью: "
+            "нужны аудитория, задачи и короткий питч.",
         )
     ]
 
@@ -140,20 +156,24 @@ def _check_facts(draft: LLMDraft, product: ProductInput) -> list[Issue]:
         issues.append(
             Issue(
                 field="facts",
-                message=f"В тексте есть числа, которых нет во входных данных: {listed}. "
+                message="В тексте есть числа, которых нет во входных данных: "
+                f"{listed}. "
                 "Убери их или запиши точно так, как в данных.",
             )
         )
 
     invented_terms = [
-        term.label for term in RISKY_TERMS if term.pattern.search(generated) and not term.pattern.search(source)
+        term.label
+        for term in RISKY_TERMS
+        if term.pattern.search(generated) and not term.pattern.search(source)
     ]
     if invented_terms:
         listed = ", ".join(invented_terms)
         issues.append(
             Issue(
                 field="facts",
-                message=f"В тексте упомянуто то, чего нет во входных данных: {listed}. Убери эти упоминания.",
+                message="В тексте упомянуто то, чего нет во входных данных: "
+                f"{listed}. Убери эти упоминания.",
             )
         )
     return issues
@@ -174,9 +194,10 @@ def _sentences_for(chars: int) -> str:
 
 def _invented_numbers(generated: str, source: str) -> list[str]:
     """
-    Числа из текста модели, которых нет во входных данных, с местом, где они встретились.
+    Числа из текста модели, которых нет во входе, с местом, где они встретились.
 
-    Контекст нужен модели при исправлении: «6» само по себе непонятно, а «6» в «манометр 1 6 мпа» — понятно.
+    Контекст нужен модели при исправлении: «6» само по себе непонятно,
+    а «6» в «манометр 1 6 мпа» — понятно.
     """
     allowed = {_number_value(match) for match in NUMBER.finditer(source)}
     invented: dict[float, str] = {}
@@ -196,15 +217,27 @@ def _context(text: str, match: re.Match[str], width: int = 25) -> str:
     line_start = text.rfind("\n", 0, match.start()) + 1
     line_end = text.find("\n", match.end())
     line_end = len(text) if line_end == -1 else line_end
-    start, end = max(line_start, match.start() - width), min(line_end, match.end() + width)
+    start, end = (
+        max(line_start, match.start() - width),
+        min(line_end, match.end() + width),
+    )
     prefix = "…" if start > line_start else ""
     suffix = "…" if end < line_end else ""
     return f"{prefix}{text[start:end].strip()}{suffix}"
 
 
 def _source_text(product: ProductInput) -> str:
-    spec_parts = [part for name, value in product.specs.items() for part in (name, value)]
-    return "\n".join([product.name, product.manufacturer or "", product.description or "", *spec_parts])
+    spec_parts = [
+        part for name, value in product.specs.items() for part in (name, value)
+    ]
+    return "\n".join(
+        [
+            product.name,
+            product.manufacturer or "",
+            product.description or "",
+            *spec_parts,
+        ]
+    )
 
 
 def _generated_text(draft: LLMDraft) -> str:

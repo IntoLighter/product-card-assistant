@@ -1,8 +1,13 @@
-from app.core.models import Issue
-from app.core.profiles import detect_profile
-from app.core.prompts import build_fix_messages, build_messages, system_prompt, user_prompt
-from app.core.validation import normalize_product
-from tests.factories import manometer
+from core.models import Issue
+from core.profiles import detect_profile
+from core.prompts import (
+    build_fix_messages,
+    build_messages,
+    system_prompt,
+    user_prompt,
+)
+from core.validation import normalize_product
+from factories import manometer
 
 
 def test_system_prompt_has_limits_and_no_placeholders():
@@ -29,7 +34,11 @@ def test_fix_messages_extend_conversation():
     product = normalize_product(manometer()).product
     messages = build_messages(product, detect_profile(product), [])
 
-    fixed = build_fix_messages(messages, '{"seo_title": "..."}', [Issue(field="seo_title", message="Слишком длинно.")])
+    fixed = build_fix_messages(
+        messages,
+        '{"seo_title": "..."}',
+        [Issue(field="seo_title", message="Слишком длинно.")],
+    )
 
     assert fixed[: len(messages)] == messages
     assert fixed[-2] == {"role": "assistant", "content": '{"seo_title": "..."}'}

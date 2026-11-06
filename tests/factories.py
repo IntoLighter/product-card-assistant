@@ -1,17 +1,13 @@
 """Тестовые данные и заглушка LLM."""
 
-from __future__ import annotations
-
 import copy
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Sequence
+from typing import Any, cast
 
-from app.core.models import Commercial, LLMDraft
+from openai.types.chat import ChatCompletionMessageParam
+from pydantic import BaseModel
 
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from openai.types.chat import ChatCompletionMessageParam
-    from pydantic import BaseModel
+from core.models import Commercial, LLMDraft
 
 _MANOMETER: dict[str, Any] = {
     "name": "Манометр показывающий DM 02",
@@ -26,9 +22,13 @@ _MANOMETER: dict[str, Any] = {
 }
 
 GOOD_DESCRIPTION = (
-    "Манометр показывающий DM 02 производства Манотомь предназначен для измерения избыточного давления "
+    "Манометр показывающий DM 02 производства Манотомь предназначен "
+    "для измерения избыточного давления "
     "и визуального контроля его значения непосредственно на месте установки. "
-) * 4 + ("Диапазон измерений 0–1,6 МПа, класс точности 1,5, присоединение G1/2, диаметр корпуса 100 мм. ") * 2
+) * 4 + (
+    "Диапазон измерений 0–1,6 МПа, класс точности 1,5, "
+    "присоединение G1/2, диаметр корпуса 100 мм. "
+) * 2
 
 
 def manometer() -> dict[str, Any]:
@@ -37,7 +37,11 @@ def manometer() -> dict[str, Any]:
 
 
 def make_draft(**overrides: object) -> LLMDraft:
-    """Корректный ответ модели. overrides подменяют поля без валидации — так получаются «плохие» ответы."""
+    """
+    Корректный ответ модели.
+
+    overrides подменяют поля без валидации — так получаются «плохие» ответы.
+    """
     draft = LLMDraft(
         seo_title="Манометр показывающий DM 02 Манотомь, 0–1,6 МПа",
         seo_description=GOOD_DESCRIPTION,
@@ -47,7 +51,6 @@ def make_draft(**overrides: object) -> LLMDraft:
             tasks=["контроль давления"],
             pitch="Простой показывающий прибор для контроля давления.",
         ),
-        clarifications=[],
     )
     return draft.model_copy(update=overrides)
 
@@ -63,7 +66,11 @@ class FakeLLM:
         self.attempts: list[int] = []
 
     def generate[T: BaseModel](
-        self, messages: Sequence[ChatCompletionMessageParam], response_model: type[T], *, attempt: int = 0
+        self,
+        messages: Sequence[ChatCompletionMessageParam],
+        response_model: type[T],
+        *,
+        attempt: int = 0,
     ) -> T:
         assert response_model is LLMDraft
         self.calls.append(list(messages))
