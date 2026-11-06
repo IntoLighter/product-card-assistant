@@ -5,15 +5,14 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     PYTHONUNBUFFERED=1
 
-# Сначала только зависимости — слой кэшируется, пока не меняется uv.lock
+# Сначала зависимости — слой кэшируется, пока не меняется uv.lock
 COPY pyproject.toml uv.lock .python-version ./
-RUN uv sync --frozen --no-dev --no-install-project
-
-# Затем код и установка самого пакета app
-COPY app ./app
-COPY examples ./examples
 RUN uv sync --frozen --no-dev
 ENV PATH="/srv/.venv/bin:$PATH"
+
+# Затем код и ресурсы: проект не устанавливается, Streamlit запускает app/ui.py
+COPY app ./app
+COPY resources ./resources
 
 EXPOSE 8501
 CMD ["streamlit", "run", "app/ui.py", "--server.address=0.0.0.0", "--server.port=8501", "--browser.gatherUsageStats=false"]

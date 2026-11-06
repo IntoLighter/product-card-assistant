@@ -9,28 +9,27 @@
 поэтому выдуманное значение в таблице появиться не может.
 """
 
-from __future__ import annotations
-
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
-from .checks import check_draft
-from .llm import LLMError, LLMOutputError
-from .models import MISSING, CardMeta, LLMDraft, ProductCard, SpecRow
-from .postprocess import fit_draft
-from .profiles import detect_profile, find_missing
-from .prompts import build_fix_messages, build_messages
-from .validation import normalize_product
+from openai.types.chat import ChatCompletionMessageParam
 
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-
-    from openai.types.chat import ChatCompletionMessageParam
-
-    from .llm import LLMClient
-    from .models import Issue, ProductInput
-    from .validation import RawProduct
+from core.checks import check_draft
+from core.llm import LLMClient, LLMError, LLMOutputError
+from core.models import (
+    MISSING,
+    CardMeta,
+    Issue,
+    LLMDraft,
+    ProductCard,
+    ProductInput,
+    SpecRow,
+)
+from core.postprocess import fit_draft
+from core.profiles import detect_profile, find_missing
+from core.prompts import build_fix_messages, build_messages
+from core.validation import RawProduct, ensure_required_specs, normalize_product
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +45,9 @@ class CheckedDraft:
     attempts: int
 
 
-def generate_card(raw: RawProduct, llm: LLMClient, *, max_attempts: int = DEFAULT_MAX_ATTEMPTS) -> ProductCard:
+def generate_card(
+    raw: RawProduct, llm: LLMClient, *, max_attempts: int = DEFAULT_MAX_ATTEMPTS
+) -> ProductCard:
     """
     Черновик карточки по сырым данным о товаре.
 
@@ -55,10 +56,15 @@ def generate_card(raw: RawProduct, llm: LLMClient, *, max_attempts: int = DEFAUL
     """
     parsed = normalize_product(raw)
     product = parsed.product
+    ensure_required_specs(
+        product
+    )  # до обращения к LLM: без обязательных данных генерировать нечего
     profile = detect_profile(product)
     missing = find_missing(product, profile)
 
-    result = generate_checked_draft(llm, product, build_messages(product, profile, missing), max_attempts)
+    result = generate_checked_draft(
+        llm, product, build_messages(product, profile, missing), max_attempts
+    )
     draft = result.draft
     return ProductCard(
         product_name=product.name,
@@ -69,13 +75,7 @@ def generate_card(raw: RawProduct, llm: LLMClient, *, max_attempts: int = DEFAUL
         specs=build_specs(product, missing),
         search_queries=[query for query in draft.search_queries if query],
         commercial=draft.commercial,
-        needs_clarification=_unique(
-            [
-                *(f"{title}: {MISSING}" for title in missing),
-                *(gap.message for gap in parsed.gaps),
-                *draft.clarifications,
-            ]
-        ),
+        needs_clarification=_unique([*parsed.empty_fields, *missing]),
         check_warnings=result.problems,
         ignored_fields=parsed.ignored_fields,
         meta=CardMeta(
@@ -89,7 +89,10 @@ def generate_card(raw: RawProduct, llm: LLMClient, *, max_attempts: int = DEFAUL
 
 
 def generate_checked_draft(
-    llm: LLMClient, product: ProductInput, messages: list[ChatCompletionMessageParam], max_attempts: int
+    llm: LLMClient,
+    product: ProductInput,
+    messages: list[ChatCompletionMessageParam],
+    max_attempts: int,
 ) -> CheckedDraft:
     """
     Генерирует ответ и при замечаниях проверки просит модель его исправить.
@@ -109,7 +112,12 @@ def generate_checked_draft(
             continue
 
         problems = check_draft(draft, product)
-        log.info("Попытка %d: замечаний проверки — %d %s", attempts, len(problems), [p.message for p in problems])
+        log.info(
+            "Попытка %d: замечаний проверки — %d %s",
+            attempts,
+            len(problems),
+            [p.message for p in problems],
+        )
         if best is None or len(problems) < len(best[1]):
             best = (draft, problems)
         if not problems:
@@ -117,15 +125,26 @@ def generate_checked_draft(
         conversation = build_fix_messages(messages, draft.model_dump_json(), problems)
 
     if best is None:
-        raise LLMError(f"Модель не вернула корректный ответ ни в одной из {attempts} попыток. Попробуйте ещё раз.")
+        raise LLMError(
+            "Модель не вернула корректный ответ "
+            f"ни в одной из {attempts} попыток. Попробуйте ещё раз."
+        )
     draft, problems = best
     return CheckedDraft(draft=draft, problems=problems, attempts=attempts)
 
 
 def build_specs(product: ProductInput, missing: list[str]) -> list[SpecRow]:
-    """Таблица характеристик: производитель, все характеристики из входа и недостающие с пометкой."""
+    """
+    Таблица характеристик.
+
+    Производитель, все характеристики из входа и недостающие с пометкой «данных нет».
+    """
     return [
-        SpecRow(name="Производитель", value=product.manufacturer or MISSING, is_missing=not product.manufacturer),
+        SpecRow(
+            name="Производитель",
+            value=product.manufacturer or MISSING,
+            is_missing=not product.manufacturer,
+        ),
         *(SpecRow(name=name, value=value) for name, value in product.specs.items()),
         *(SpecRow(name=title, value=MISSING, is_missing=True) for title in missing),
     ]
@@ -133,15 +152,15 @@ def build_specs(product: ProductInput, missing: list[str]) -> list[SpecRow]:
 
 def _unique(items: Iterable[str]) -> list[str]:
     """
-    Без повторов, в исходном порядке.
+    Без повторов (без учёта регистра), в исходном порядке.
 
-    Сравнение без учёта регистра, точки в конце и пометки «данных нет»: модель часто
-    повторяет недостающее поле («измеряемая среда»), которое код уже добавил.
+    Пустое во входе поле («диаметр корпуса»: "") попадает и в пустые поля,
+    и в недостающие рекомендуемые («Диаметр корпуса») — в списке оно должно быть одно.
     """
     seen: set[str] = set()
     unique: list[str] = []
     for item in items:
-        key = item.strip().rstrip(".").lower().removesuffix(f": {MISSING}")
+        key = item.strip().lower()
         if key and key not in seen:
             seen.add(key)
             unique.append(item.strip())

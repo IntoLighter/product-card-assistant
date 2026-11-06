@@ -94,6 +94,6 @@ id = "pytest"
 name = "pytest"
 entry = "uv run pytest -q"
 language = "system"
-# Шаблоны промптов тоже покрыты тестами
-files = '^(app/|tests/).*\.(py|txt)$'
+# Ресурсы (промпты и шаблоны приборов) тоже покрыты тестами
+files = '^(app/.*\.py|tests/.*\.py|resources/.*\.(txt|json))$'
 pass_filenames = false

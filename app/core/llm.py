@@ -5,20 +5,15 @@
 сервер не даст модели вернуть невалидный JSON или лишние поля.
 """
 
-from __future__ import annotations
-
+from collections.abc import Sequence
 from http import HTTPStatus
-from typing import TYPE_CHECKING, NamedTuple, Protocol
+from typing import NamedTuple, Protocol
 
 import openai
+from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import BaseModel, ValidationError
 
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
-
-    from .config import Settings
+from core.config import Settings
 
 MAX_COMPLETION_TOKENS = 2048
 HEALTH_CHECK_TIMEOUT_SECONDS = 3
@@ -27,7 +22,7 @@ TRANSPORT_RETRIES = 2
 
 
 class LLMError(Exception):
-    """Сбой связи или сервера: повтор генерации не поможет, нужно сообщить пользователю."""
+    """Сбой связи или сервера: повтор не поможет, нужно сообщить пользователю."""
 
 
 class LLMOutputError(Exception):
@@ -46,12 +41,17 @@ class LLMClient(Protocol):
     def model_name(self) -> str: ...
 
     def generate[T: BaseModel](
-        self, messages: Sequence[ChatCompletionMessageParam], response_model: type[T], *, attempt: int = 0
+        self,
+        messages: Sequence[ChatCompletionMessageParam],
+        response_model: type[T],
+        *,
+        attempt: int = 0,
     ) -> T:
         """
         Ответ модели, разобранный в response_model.
 
-        attempt сдвигает seed: при фиксированном seed повтор того же запроса дал бы тот же ответ.
+        attempt сдвигает seed: при фиксированном seed повтор того же запроса
+        дал бы тот же ответ.
         """
         ...
 
@@ -73,7 +73,11 @@ class OpenAICompatibleClient:
         return self.settings.model
 
     def generate[T: BaseModel](
-        self, messages: Sequence[ChatCompletionMessageParam], response_model: type[T], *, attempt: int = 0
+        self,
+        messages: Sequence[ChatCompletionMessageParam],
+        response_model: type[T],
+        *,
+        attempt: int = 0,
     ) -> T:
         try:
             response = self._client.chat.completions.create(
@@ -90,7 +94,8 @@ class OpenAICompatibleClient:
                         "strict": True,
                     },
                 },
-                # Qwen3/3.5: без режима рассуждений ответ быстрее, а копирайтингу он не нужен
+                # Qwen3/3.5: без режима рассуждений ответ быстрее,
+                # а копирайтингу он не нужен
                 extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
         except openai.APIError as error:
@@ -98,9 +103,15 @@ class OpenAICompatibleClient:
         return parse_response(response, response_model)
 
     def check_server(self) -> ServerStatus:
-        """Готов ли сервер отвечать: для индикатора в интерфейсе и проверки перед пакетным запуском."""
+        """
+        Готов ли сервер отвечать.
+
+        Для индикатора в интерфейсе и проверки перед пакетным запуском.
+        """
         try:
-            models = self._client.with_options(timeout=HEALTH_CHECK_TIMEOUT_SECONDS, max_retries=0).models.list()
+            models = self._client.with_options(
+                timeout=HEALTH_CHECK_TIMEOUT_SECONDS, max_retries=0
+            ).models.list()
         except openai.APIError:
             return ServerStatus(
                 ready=False,
@@ -111,14 +122,23 @@ class OpenAICompatibleClient:
         if self.settings.model not in available:
             return ServerStatus(
                 ready=False,
-                message=f"Сервер доступен, но модели «{self.settings.model}» на нём нет. "
+                message="Сервер доступен, "
+                f"но модели «{self.settings.model}» на нём нет. "
                 f"Доступны: {', '.join(available) or '—'}.",
             )
-        return ServerStatus(ready=True, message=f"Модель «{self.settings.model}» готова.")
+        return ServerStatus(
+            ready=True, message=f"Модель «{self.settings.model}» готова."
+        )
 
 
-def parse_response[T: BaseModel](response: ChatCompletion, response_model: type[T]) -> T:
-    """Текст ответа -> response_model; любые отклонения — LLMOutputError, чтобы пайплайн повторил запрос."""
+def parse_response[T: BaseModel](
+    response: ChatCompletion, response_model: type[T]
+) -> T:
+    """
+    Текст ответа -> response_model.
+
+    Любые отклонения — LLMOutputError, чтобы пайплайн повторил запрос.
+    """
     if not response.choices:
         raise LLMOutputError("пустой ответ модели")
     choice = response.choices[0]
@@ -127,22 +147,29 @@ def parse_response[T: BaseModel](response: ChatCompletion, response_model: type[
     try:
         return response_model.model_validate_json(choice.message.content or "")
     except ValidationError as error:
-        raise LLMOutputError(f"ответ не соответствует схеме ({error.error_count()} ошибок)") from error
+        raise LLMOutputError(
+            f"ответ не соответствует схеме ({error.error_count()} ошибок)"
+        ) from error
 
 
 def describe_api_error(error: openai.APIError, settings: Settings) -> str:
     """Понятное пользователю описание сбоя API с подсказкой, что проверить."""
     if isinstance(error, openai.APITimeoutError):
-        return f"LLM не ответила за {settings.timeout:.0f} с. Попробуйте ещё раз или увеличьте REQUEST_TIMEOUT."
+        return (
+            f"LLM не ответила за {settings.timeout:.0f} с. "
+            "Попробуйте ещё раз или увеличьте REQUEST_TIMEOUT."
+        )
     if isinstance(error, openai.APIConnectionError):
         return (
-            f"Нет связи с LLM-сервером ({settings.base_url}). Проверьте, что контейнер vllm запущен "
-            "(docker compose ps): первая загрузка модели занимает несколько минут."
+            f"Нет связи с LLM-сервером ({settings.base_url}). "
+            "Проверьте, что контейнер vllm запущен (docker compose ps): "
+            "первая загрузка модели занимает несколько минут."
         )
     if isinstance(error, openai.APIStatusError):
         known_statuses: dict[int, str] = {
             HTTPStatus.UNAUTHORIZED: "LLM-сервер отклонил ключ доступа (LLM_API_KEY).",
-            HTTPStatus.NOT_FOUND: f"Модель «{settings.model}» не найдена на сервере. Проверьте LLM_MODEL.",
+            HTTPStatus.NOT_FOUND: f"Модель «{settings.model}» не найдена на сервере. "
+            "Проверьте LLM_MODEL.",
             HTTPStatus.BAD_REQUEST: f"LLM-сервер отклонил запрос: {error.message}",
         }
         fallback = f"Ошибка LLM-сервера (HTTP {error.status_code}): {error.message}"

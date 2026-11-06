@@ -1,30 +1,22 @@
 """
 Пакетная генерация карточек из JSON-файлов.
 
-    uv run python -m app.cli examples/*.json --out examples/output
+    uv run python app/cli.py examples/*.json --out examples/output
 """
-
-from __future__ import annotations
 
 import argparse
 import io
 import logging
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from app.core.config import Settings
-from app.core.llm import LLMError, OpenAICompatibleClient
-from app.core.pipeline import generate_card
-from app.core.render import to_json, to_markdown
-from app.core.validation import InputError, parse_json
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from app.core.llm import LLMClient
-    from app.core.validation import RawProduct
+from core.config import Settings
+from core.llm import LLMClient, LLMError, OpenAICompatibleClient
+from core.pipeline import generate_card
+from core.render import to_json, to_markdown
+from core.validation import InputError, RawProduct, parse_json
 
 EXIT_OK = 0
 EXIT_HAS_FAILURES = 1
@@ -36,9 +28,12 @@ GLOB_CHARS = frozenset("*?[")
 def main(argv: Sequence[str] | None = None) -> int:
     _use_utf8_console()  # до argparse: иначе кириллица в --help выводится кракозябрами
     args = _parse_args(argv)
-    logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO if args.verbose else logging.WARNING,
+        format="%(levelname)s %(message)s",
+    )
 
-    settings = Settings.from_env()
+    settings = Settings()
     llm = OpenAICompatibleClient(settings)
     status = llm.check_server()
     if not status.ready:
@@ -87,7 +82,8 @@ class BatchRunner:
         verdict = "ok" if card.meta.checks_passed else "есть замечания"
         print(
             f"[{verdict}] {stem}: заголовок {card.meta.seo_title_length} симв., "
-            f"описание {card.meta.seo_description_length} симв., попыток {card.meta.attempts}"
+            f"описание {card.meta.seo_description_length} симв., "
+            f"попыток {card.meta.attempts}"
         )
 
     def _fail(self, where: str, message: str) -> None:
@@ -96,28 +92,50 @@ class BatchRunner:
 
 
 def expand_patterns(patterns: Sequence[str]) -> list[Path]:
-    """Раскрывает маски вида examples/*.json: PowerShell, в отличие от bash, сам их не раскрывает."""
+    """
+    Раскрывает маски вида examples/*.json.
+
+    PowerShell, в отличие от bash, сам их не раскрывает.
+    """
     paths: list[Path] = []
     for pattern in patterns:
         path = Path(pattern)
         if GLOB_CHARS.isdisjoint(path.name):
             paths.append(path)
         else:
-            # Если по маске ничего нет, оставляем её как есть: чтение файла сообщит об ошибке
+            # Если по маске ничего нет, оставляем её как есть:
+            # чтение файла сообщит об ошибке
             paths.extend(sorted(path.parent.glob(path.name)) or [path])
     return paths
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="product-cards", description="Черновики карточек товаров КИП из JSON")
-    parser.add_argument("inputs", nargs="+", help="JSON-файлы или маски (объект или массив товаров в файле)")
-    parser.add_argument("--out", type=Path, default=Path("examples/output"), help="папка для .md и .json")
-    parser.add_argument("-v", "--verbose", action="store_true", help="подробный лог генерации")
+    parser = argparse.ArgumentParser(
+        prog="product-cards", description="Черновики карточек товаров КИП из JSON"
+    )
+    parser.add_argument(
+        "inputs",
+        nargs="+",
+        help="JSON-файлы или маски (объект или массив товаров в файле)",
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path("examples/output"),
+        help="папка для .md и .json",
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="подробный лог генерации"
+    )
     return parser.parse_args(argv)
 
 
 def _use_utf8_console() -> None:
-    """Windows: при выводе в канал кодировка по умолчанию не UTF-8, и кириллица ломается."""
+    """
+    Переключает вывод на UTF-8.
+
+    В Windows при выводе в канал кодировка по умолчанию не UTF-8, и кириллица ломается.
+    """
     for stream in (sys.stdout, sys.stderr):  # stderr — для логов
         if isinstance(stream, io.TextIOWrapper):
             stream.reconfigure(encoding="utf-8")

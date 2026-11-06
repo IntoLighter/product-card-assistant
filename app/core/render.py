@@ -1,15 +1,14 @@
-"""Карточка в виде, удобном для копирования: Markdown и JSON."""
+"""Карточка в виде, удобном для копирования: обычный текст, Markdown и JSON."""
 
-from __future__ import annotations
+from collections.abc import Iterable
 
-from typing import TYPE_CHECKING
+from core.models import ProductCard
 
-from .models import DESCRIPTION_MAX_LEN, DESCRIPTION_MIN_LEN, TITLE_MAX_LEN
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-
-    from .models import ProductCard
+TITLE_HEADING = "SEO-заголовок"
+DESCRIPTION_HEADING = "SEO-описание"
+WARNINGS_INTRO = (
+    "**Автоматическая проверка нашла замечания — просмотрите их перед публикацией:**"
+)
 
 
 def to_markdown(card: ProductCard) -> str:
@@ -21,8 +20,39 @@ def to_markdown(card: ProductCard) -> str:
         _specs_table(card),
         _section("Поисковые запросы", _bullets(card.search_queries)),
         _commercial(card),
-        _section("Требует уточнения", _bullets(card.needs_clarification)) if card.needs_clarification else "",
-        _footer(card),
+        _section("Требует уточнения", _bullets(card.needs_clarification))
+        if card.needs_clarification
+        else "",
+    ]
+    return "\n\n".join(section for section in sections if section) + "\n"
+
+
+def to_text(card: ProductCard) -> str:
+    """Обычный текст без разметки: чтобы вставить куда угодно, например в CMS."""
+    commercial = card.commercial
+    manager_notes = [
+        f"Кому подходит:\n{_bullets(commercial.audience)}",
+        f"Какие задачи решает:\n{_bullets(commercial.tasks)}",
+        f"Как предложить клиенту: {commercial.pitch}",
+    ]
+    warnings = _bullets(warning.message for warning in card.check_warnings)
+    sections = [
+        card.product_name,
+        _text_section("Замечания автоматической проверки", warnings)
+        if warnings
+        else "",
+        f"Категория: {card.category}",
+        _text_section(TITLE_HEADING, card.seo_title),
+        _text_section(DESCRIPTION_HEADING, card.seo_description),
+        _text_section(
+            "Ключевые характеристики",
+            "\n".join(f"{spec.name}: {spec.value}" for spec in card.specs),
+        ),
+        _text_section("Поисковые запросы", _bullets(card.search_queries)),
+        _text_section("Для менеджера", "\n\n".join(manager_notes)),
+        _text_section("Требует уточнения", _bullets(card.needs_clarification))
+        if card.needs_clarification
+        else "",
     ]
     return "\n\n".join(section for section in sections if section) + "\n"
 
@@ -34,22 +64,29 @@ def to_json(card: ProductCard) -> str:
 def _check_warnings(card: ProductCard) -> str:
     if not card.check_warnings:
         return ""
-    lines = ["**Автоматическая проверка нашла замечания — просмотрите их перед публикацией:**", ""]
+    lines = [WARNINGS_INTRO, ""]
     lines += [f"- {warning.message}" for warning in card.check_warnings]
     return "\n".join(f"> {line}".rstrip() for line in lines)
 
 
 def _seo(card: ProductCard) -> str:
-    title_heading = f"SEO-заголовок ({card.meta.seo_title_length} из {TITLE_MAX_LEN} символов)"
-    description_heading = (
-        f"SEO-описание ({card.meta.seo_description_length} символов, норма {DESCRIPTION_MIN_LEN}–{DESCRIPTION_MAX_LEN})"
+    return "\n\n".join(
+        [
+            _section(TITLE_HEADING, card.seo_title),
+            _section(DESCRIPTION_HEADING, card.seo_description),
+        ]
     )
-    return "\n\n".join([_section(title_heading, card.seo_title), _section(description_heading, card.seo_description)])
 
 
 def _specs_table(card: ProductCard) -> str:
-    rows = [f"| {_table_cell(spec.name)} | {_table_cell(spec.value)} |" for spec in card.specs]
-    return _section("Ключевые характеристики", "\n".join(["| Характеристика | Значение |", "| --- | --- |", *rows]))
+    rows = [
+        f"| {_table_cell(spec.name)} | {_table_cell(spec.value)} |"
+        for spec in card.specs
+    ]
+    return _section(
+        "Ключевые характеристики",
+        "\n".join(["| Характеристика | Значение |", "| --- | --- |", *rows]),
+    )
 
 
 def _commercial(card: ProductCard) -> str:
@@ -62,16 +99,12 @@ def _commercial(card: ProductCard) -> str:
     return _section("Для менеджера", "\n\n".join(parts))
 
 
-def _footer(card: ProductCard) -> str:
-    return (
-        "---\n\n"
-        f"_Черновик сгенерирован моделью {card.meta.llm_model}, попыток генерации: {card.meta.attempts}. "
-        "Технические значения взяты только из входных данных._"
-    )
-
-
 def _section(heading: str, body: str, *, level: int = 2) -> str:
     return f"{'#' * level} {heading}\n\n{body}"
+
+
+def _text_section(heading: str, body: str) -> str:
+    return f"{heading.upper()}\n{body}"
 
 
 def _bullets(items: Iterable[str]) -> str:

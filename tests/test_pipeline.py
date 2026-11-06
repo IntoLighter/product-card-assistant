@@ -1,9 +1,10 @@
 import pytest
 
-from app.core.llm import LLMError, LLMOutputError
-from app.core.models import MISSING
-from app.core.pipeline import generate_card
-from tests.factories import FakeLLM, make_draft, manometer
+from core.llm import LLMError, LLMOutputError
+from core.models import MISSING
+from core.pipeline import generate_card
+from core.validation import InputError
+from factories import FakeLLM, make_draft, manometer
 
 
 def test_card_combines_input_and_draft():
@@ -23,26 +24,42 @@ def test_missing_specs_marked():
     card = generate_card(manometer(), FakeLLM(make_draft()))
 
     missing = [spec for spec in card.specs if spec.is_missing]
-    assert [spec.name for spec in missing] == ["Измеряемая среда", "Температура рабочей среды"]
+    assert [spec.name for spec in missing] == [
+        "Измеряемая среда",
+        "Температура рабочей среды",
+    ]
     assert all(spec.value == MISSING for spec in missing)
-    assert f"Измеряемая среда: {MISSING}" in card.needs_clarification
+    assert card.needs_clarification == ["Измеряемая среда", "Температура рабочей среды"]
 
 
-def test_input_gaps_and_model_notes_in_clarifications():
+def test_clarifications_list_empty_and_missing_fields_once():
     raw = manometer()
     raw["manufacturer"] = ""
+    raw["specs"]["измеряемая среда"] = (
+        ""  # пустая во входе и недостающая рекомендуемая одновременно
+    )
     raw["warehouse"] = "Москва"
-    draft = make_draft(clarifications=["Уточнить материал корпуса", "Не указан производитель", "измеряемая среда"])
 
-    card = generate_card(raw, FakeLLM(draft))
+    card = generate_card(raw, FakeLLM(make_draft()))
 
     assert card.manufacturer == MISSING
     assert card.specs[0].is_missing
-    # Без дублей от модели: ни производителя, ни недостающего поля, уже добавленного кодом
-    assert card.needs_clarification.count("Не указан производитель.") == 1
-    assert "измеряемая среда" not in card.needs_clarification
-    assert "Уточнить материал корпуса" in card.needs_clarification
+    assert card.needs_clarification == [
+        "Производитель",
+        "измеряемая среда",
+        "Температура рабочей среды",
+    ]
     assert card.ignored_fields == ["warehouse"]
+
+
+def test_missing_required_specs_stop_before_llm():
+    raw = manometer()
+    del raw["specs"]["класс точности"]
+    llm = FakeLLM(make_draft())
+
+    with pytest.raises(InputError, match="Класс точности"):
+        generate_card(raw, llm)
+    assert llm.calls == []
 
 
 def test_retry_sends_check_feedback():

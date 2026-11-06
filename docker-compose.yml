@@ -1,47 +1,47 @@
 name: product-card-assistant
 
+# Значения переменных — из .env (compose читает его сам), секреты — из .env_secrets
+x-env-files: &env-files
+  - path: .env
+  - path: .env_secrets
+    required: false
+
 services:
   vllm:
-    container_name: vllm
-    image: vllm/vllm-openai:${VLLM_IMAGE_TAG:-v0.28.0}
-    # Строковая форма: compose разбивает её на аргументы ПОСЛЕ подстановки,
-    # поэтому VLLM_EXTRA_ARGS может содержать несколько флагов
+    image: vllm/vllm-openai:${VLLM_IMAGE_TAG}
     command: >-
-      --model=${VLLM_MODEL:-RedHatAI/Qwen3.5-4B-quantized.w4a16}
-      --served-model-name=${LLM_MODEL:-local-model}
-      --max-model-len=${VLLM_MAX_MODEL_LEN:-6144}
-      --gpu-memory-utilization=${VLLM_GPU_MEMORY_UTILIZATION:-0.85}
-      --max-num-seqs=${VLLM_MAX_NUM_SEQS:-8}
+      --model=${VLLM_MODEL}
+      --served-model-name=${LLM_MODEL}
+      --max-model-len=${VLLM_MAX_MODEL_LEN}
+      --gpu-memory-utilization=${VLLM_GPU_MEMORY_UTILIZATION}
+      --max-num-seqs=${VLLM_MAX_NUM_SEQS}
       --reasoning-parser=qwen3
-      ${VLLM_EXTRA_ARGS---language-model-only}
-    environment:
-      - HF_TOKEN=${HF_TOKEN:-}
-      # Xet-загрузчик HF в контейнере под WSL2 зависает — качаем обычным HTTPS
-      - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET:-1}
+      --language-model-only
+      ${VLLM_EXTRA_ARGS}
+    env_file: *env-files
     volumes:
       - hf-cache:/root/.cache/huggingface
     ports:
       - "8000:8000"
-    ipc: host
+    shm_size: 2gb
     gpus: all
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 900s   # первая загрузка модели может занять долго
+      start_period: 900s
     restart: unless-stopped
 
   app:
-    container_name: app
     build: .
+    env_file: *env-files
     environment:
+      # Адрес vLLM внутри сети Docker (в .env — адрес для запуска вне Docker)
       - LLM_BASE_URL=http://vllm:8000/v1
-      - LLM_MODEL=${LLM_MODEL:-local-model}
-      - LLM_API_KEY=${LLM_API_KEY:-EMPTY}
-      - TEMPERATURE=${TEMPERATURE:-0.3}
-      - SEED=${SEED:-42}
-      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-120}
+    volumes:
+      - ./app:/srv/app
+      - ./resources:/srv/resources
     ports:
       - "80:8501"
     depends_on:

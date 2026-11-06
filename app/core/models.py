@@ -5,8 +5,6 @@
 их используют JSON-схема ответа, промпт и автоматическая проверка.
 """
 
-from __future__ import annotations
-
 from pydantic import BaseModel, ConfigDict, Field
 
 MISSING = "данных нет"
@@ -19,12 +17,10 @@ DESCRIPTION_TARGET_LEN = 1000
 QUERIES_MIN = 3
 QUERIES_MAX = 5
 COMMERCIAL_ITEMS_MAX = 4
-# Уточнения от модели: недостающие поля добавляет код, от модели нужны только важные пункты сверх них
-CLARIFICATIONS_MAX = 3
 
 
 class ProductInput(BaseModel):
-    """Нормализованные входные данные: строки без лишних пробелов, пустые значения отброшены."""
+    """Нормализованные входные данные: без лишних пробелов и пустых значений."""
 
     name: str
     manufacturer: str | None = None
@@ -53,7 +49,8 @@ class LLMDraft(BaseModel):
     """
     Ответ модели; по этой модели строится JSON-схема структурированного вывода.
 
-    Технических характеристик здесь нет намеренно: их таблицу собирает код из входных данных.
+    Технических характеристик и списка уточнений здесь нет намеренно: их собирает код
+    из входных данных, а модель в них только добавляла бы шум.
     """
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -62,7 +59,6 @@ class LLMDraft(BaseModel):
     seo_description: str
     search_queries: list[str] = Field(min_length=QUERIES_MIN, max_length=QUERIES_MAX)
     commercial: Commercial
-    clarifications: list[str] = Field(max_length=CLARIFICATIONS_MAX)
 
 
 class SpecRow(BaseModel):
@@ -94,7 +90,7 @@ class ProductCard(BaseModel):
     specs: list[SpecRow]
     search_queries: list[str]
     commercial: Commercial
-    # Пробелы во входных данных: что уточнить у поставщика
+    # Чего не хватает во входных данных — что уточнить у поставщика
     needs_clarification: list[str]
     # Замечания автоматической проверки, которые модель не исправила
     check_warnings: list[Issue]

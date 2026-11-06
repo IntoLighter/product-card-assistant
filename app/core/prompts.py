@@ -1,21 +1,18 @@
 """
-Сообщения для LLM, собранные из шаблонов в prompt_templates/.
+Сообщения для LLM, собранные из шаблонов в resources/prompts/.
 
 Тексты промптов лежат отдельными файлами, чтобы их можно было читать и править,
 не трогая код. Подстановки делает string.Template ($name), а ограничения из ТЗ
 берутся из models, поэтому промпт и проверка ответа не расходятся.
 """
 
-from __future__ import annotations
-
 import json
-from functools import cache
-from pathlib import Path
+from collections.abc import Iterable, Sequence
 from string import Template
-from typing import TYPE_CHECKING
 
-from .models import (
-    CLARIFICATIONS_MAX,
+from openai.types.chat import ChatCompletionMessageParam
+
+from core.models import (
     COMMERCIAL_ITEMS_MAX,
     DESCRIPTION_MAX_LEN,
     DESCRIPTION_MIN_LEN,
@@ -23,20 +20,16 @@ from .models import (
     QUERIES_MAX,
     QUERIES_MIN,
     TITLE_MAX_LEN,
+    Issue,
+    ProductInput,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
-
-    from openai.types.chat import ChatCompletionMessageParam
-
-    from .models import Issue, ProductInput
-    from .profiles import Profile
-
-TEMPLATES_DIR = Path(__file__).parent / "prompt_templates"
+from core.profiles import Profile
+from core.resources import prompts_dir
 
 
-def build_messages(product: ProductInput, profile: Profile, missing: list[str]) -> list[ChatCompletionMessageParam]:
+def build_messages(
+    product: ProductInput, profile: Profile, missing: list[str]
+) -> list[ChatCompletionMessageParam]:
     """Первый запрос: системные правила и данные о товаре."""
     return [
         {"role": "system", "content": system_prompt()},
@@ -45,10 +38,18 @@ def build_messages(product: ProductInput, profile: Profile, missing: list[str]) 
 
 
 def build_fix_messages(
-    messages: Sequence[ChatCompletionMessageParam], previous_answer: str, problems: list[Issue]
+    messages: Sequence[ChatCompletionMessageParam],
+    previous_answer: str,
+    problems: list[Issue],
 ) -> list[ChatCompletionMessageParam]:
-    """Повторный запрос: исходный диалог, прошлый ответ модели и конкретные замечания проверки."""
-    fix_request = _template("fix").substitute(problems=_bullets(problem.message for problem in problems))
+    """
+    Повторный запрос на исправление.
+
+    Исходный диалог, прошлый ответ модели и конкретные замечания проверки.
+    """
+    fix_request = _template("fix").substitute(
+        problems=_bullets(problem.message for problem in problems)
+    )
     return [
         *messages,
         {"role": "assistant", "content": previous_answer},
@@ -64,7 +65,6 @@ def system_prompt() -> str:
         queries_min=QUERIES_MIN,
         queries_max=QUERIES_MAX,
         commercial_max=COMMERCIAL_ITEMS_MAX,
-        clarifications_max=CLARIFICATIONS_MAX,
     )
 
 
@@ -82,9 +82,9 @@ def user_prompt(product: ProductInput, profile: Profile, missing: list[str]) -> 
     )
 
 
-@cache
 def _template(name: str) -> Template:
-    return Template((TEMPLATES_DIR / f"{name}.txt").read_text(encoding="utf-8"))
+    # Без кэша: правки шаблонов видны сразу, без перезапуска; файлы крошечные
+    return Template((prompts_dir() / f"{name}.txt").read_text(encoding="utf-8"))
 
 
 def _bullets(items: Iterable[str]) -> str:
