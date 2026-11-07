@@ -58,7 +58,7 @@ class BatchRunner:
 
     def run_file(self, path: Path) -> None:
         try:
-            products = parse_json(path.read_text(encoding="utf-8"))
+            raw = parse_json(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError) as error:
             self._fail(str(path), f"не удалось прочитать файл ({error})")
             return
@@ -66,9 +66,7 @@ class BatchRunner:
             self._fail(str(path), str(error))
             return
 
-        for number, raw in enumerate(products, start=1):
-            stem = path.stem if len(products) == 1 else f"{path.stem}_{number}"
-            self._run_product(raw, stem)
+        self._run_product(raw, path.stem)
 
     def _run_product(self, raw: RawProduct, stem: str) -> None:
         try:
@@ -116,7 +114,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "inputs",
         nargs="+",
-        help="JSON-файлы или маски (объект или массив товаров в файле)",
+        help="JSON-файлы или маски (в каждом файле один товар)",
     )
     parser.add_argument(
         "--out",

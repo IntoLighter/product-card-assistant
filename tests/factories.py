@@ -8,6 +8,7 @@ from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 
 from core.models import Commercial, LLMDraft
+from core.validation import RawProduct
 
 _MANOMETER: dict[str, Any] = {
     "name": "Манометр показывающий DM 02",
@@ -31,9 +32,18 @@ GOOD_DESCRIPTION = (
 ) * 2
 
 
-def manometer() -> dict[str, Any]:
-    """Свежая копия входных данных: тесты могут менять вложенный specs."""
+def manometer_data() -> dict[str, Any]:
+    """Свежая копия входного JSON: тесты могут менять вложенный specs."""
     return copy.deepcopy(_MANOMETER)
+
+
+def manometer() -> RawProduct:
+    return raw_product(manometer_data())
+
+
+def raw_product(data: dict[str, Any]) -> RawProduct:
+    """Товар из словаря в формате входного JSON."""
+    return RawProduct.model_validate(data)
 
 
 def make_draft(**overrides: object) -> LLMDraft:

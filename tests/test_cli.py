@@ -1,7 +1,7 @@
 import json
 
 from cli import BatchRunner, expand_patterns
-from factories import FakeLLM, make_draft, manometer
+from factories import FakeLLM, make_draft, manometer_data
 
 
 def test_expand_patterns(tmp_path):
@@ -18,21 +18,24 @@ def test_expand_patterns(tmp_path):
 
 
 def test_batch_runner_writes_results_and_counts_failures(tmp_path):
-    products = tmp_path / "products.json"
-    products.write_text(
-        json.dumps([manometer(), {"name": ""}], ensure_ascii=False), encoding="utf-8"
-    )
+    good = tmp_path / "manometer.json"
+    good.write_text(json.dumps(manometer_data(), ensure_ascii=False), encoding="utf-8")
+    nameless = tmp_path / "nameless.json"
+    nameless.write_text('{"name": ""}', encoding="utf-8")
+    array = tmp_path / "array.json"
+    array.write_text("[]", encoding="utf-8")
     broken = tmp_path / "broken.json"
     broken.write_text("{не json", encoding="utf-8")
     out_dir = tmp_path / "out"
     out_dir.mkdir()
 
     runner = BatchRunner(llm=FakeLLM(make_draft()), out_dir=out_dir, max_attempts=1)
-    for path in [products, broken, tmp_path / "absent.json"]:
+    for path in [good, nameless, array, broken, tmp_path / "absent.json"]:
         runner.run_file(path)
 
     assert sorted(path.name for path in out_dir.iterdir()) == [
-        "products_1.json",
-        "products_1.md",
+        "manometer.json",
+        "manometer.md",
     ]
-    assert runner.failures == 3  # товар без названия, битый JSON, отсутствующий файл
+    # Товар без названия, массив вместо объекта, битый JSON, отсутствующий файл
+    assert runner.failures == 4

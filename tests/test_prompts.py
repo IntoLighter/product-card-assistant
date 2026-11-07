@@ -7,7 +7,7 @@ from core.prompts import (
     user_prompt,
 )
 from core.validation import normalize_product
-from factories import manometer
+from factories import manometer, manometer_data, raw_product
 
 
 def test_system_prompt_has_limits_and_no_placeholders():
@@ -18,9 +18,9 @@ def test_system_prompt_has_limits_and_no_placeholders():
 
 
 def test_user_prompt_contains_data_and_missing_fields():
-    raw = manometer()
-    raw["manufacturer"] = None
-    product = normalize_product(raw).product
+    raw = manometer_data()
+    raw["manufacturer"] = ""
+    product = normalize_product(raw_product(raw)).product
 
     prompt = user_prompt(product, detect_profile(product), ["Измеряемая среда"])
 

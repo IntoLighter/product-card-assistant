@@ -49,7 +49,7 @@ def generate_card(
     raw: RawProduct, llm: LLMClient, *, max_attempts: int = DEFAULT_MAX_ATTEMPTS
 ) -> ProductCard:
     """
-    Черновик карточки по сырым данным о товаре.
+    Черновик карточки по данным о товаре из входного JSON или формы.
 
     Бросает InputError, если данные нельзя обработать, и LLMError,
     если LLM недоступна или ни разу не вернула корректный ответ.

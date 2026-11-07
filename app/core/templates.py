@@ -35,15 +35,14 @@ class ProductTemplate(BaseModel):
         return self.name or OTHER_DEVICE_LABEL
 
     def to_raw_product(self) -> RawProduct:
-        """Данные для формы в формате входного JSON, с пустыми характеристиками."""
-        return {"name": self.name, "specs": dict.fromkeys(self.specs, "")}
+        """Товар для формы: название типа и характеристики без значений."""
+        return RawProduct(name=self.name, specs=dict.fromkeys(self.specs, ""))
 
 
 def load_templates() -> dict[str, RawProduct]:
     """
-    Шаблоны для формы в виде {подпись для списка: данные в формате входного JSON}.
+    Шаблоны для формы в виде {подпись для списка: товар для формы}.
 
-    Читаются при каждом вызове, без кэша: правка JSON сразу видна в интерфейсе.
     Шаблоны идут по алфавиту, «Другой прибор» — последним.
     """
     templates = [
