@@ -39,7 +39,6 @@ SPECS_KEY = "form_specs"
 SPECS_EDITOR_VERSION_KEY = "form_specs_version"
 UPLOAD_KEY = "upload"
 UPLOAD_ERROR_KEY = "upload_error"
-UPLOAD_NOTE_KEY = "upload_note"
 RESULT_KEY = "result"
 
 
@@ -54,6 +53,12 @@ class GenerationResult:
 @st.cache_resource
 def get_llm() -> OpenAICompatibleClient:
     return OpenAICompatibleClient(Settings())
+
+
+@st.cache_resource
+def get_templates() -> dict[str, RawProduct]:
+    """Шаблоны читаются один раз за запуск: после правки JSON перезапустите app."""
+    return load_templates()
 
 
 def main() -> None:
@@ -115,7 +120,7 @@ def render_form() -> RawProduct:
     with template_tab:
         st.selectbox(
             "Заполнить из шаблона",
-            ["", *load_templates()],
+            ["", *get_templates()],
             key=TEMPLATE_KEY,
             on_change=_fill_form_from_template,
             format_func=lambda label: label or "— пустая форма —",
@@ -129,8 +134,6 @@ def render_form() -> RawProduct:
         )
         if error := st.session_state.get(UPLOAD_ERROR_KEY):
             st.error(error)
-        if note := st.session_state.get(UPLOAD_NOTE_KEY):
-            st.info(note)
 
     name = st.text_input(
         "Название *", key=NAME_KEY, placeholder="Манометр показывающий DM 02"
@@ -152,12 +155,9 @@ def render_form() -> RawProduct:
         for row in rows
         if row.get(SPEC_NAME)
     }
-    return {
-        "name": name,
-        "manufacturer": manufacturer,
-        "specs": specs,
-        "description": description,
-    }
+    return RawProduct(
+        name=name, manufacturer=manufacturer, specs=specs, description=description
+    )
 
 
 def _generation_blocked_reason(raw: RawProduct) -> str | None:
@@ -167,7 +167,7 @@ def _generation_blocked_reason(raw: RawProduct) -> str | None:
     Обязательны название и характеристики, обязательные по профилю категории;
     прочие пробелы сервис не запрещает, а помечает «данных нет».
     """
-    if not str(raw.get("name") or "").strip():
+    if not raw.name.strip():
         return "Заполните обязательное поле «Название»."
     try:
         ensure_required_specs(normalize_product(raw).product)
@@ -179,7 +179,7 @@ def _generation_blocked_reason(raw: RawProduct) -> str | None:
 def _fill_form_from_template() -> None:
     """Подставляет выбранный шаблон в поля формы; пустой выбор очищает форму."""
     label = st.session_state.get(TEMPLATE_KEY)
-    _fill_form(load_templates().get(label, {}) if label else {})
+    _fill_form(get_templates().get(label, RawProduct()))
 
 
 def _fill_form_from_file() -> None:
@@ -188,50 +188,31 @@ def _fill_form_from_file() -> None:
     if uploaded is None:  # файл убрали из поля загрузки — форму не трогаем
         return
     try:
-        products = parse_json(uploaded.getvalue().decode("utf-8"))
+        raw = parse_json(uploaded.getvalue().decode("utf-8"))
     except (UnicodeDecodeError, InputError) as error:
-        _clear_upload_messages()
         st.session_state[UPLOAD_ERROR_KEY] = (
             f"Не удалось загрузить {uploaded.name}: {error}"
         )
         return
 
-    _fill_form(products[0])
+    _fill_form(raw)
     st.session_state[TEMPLATE_KEY] = (
         ""  # иначе в списке осталось бы имя прежнего шаблона
     )
-    if len(products) > 1:
-        st.session_state[UPLOAD_NOTE_KEY] = (
-            f"Товаров в файле: {len(products)}. Загружен первый."
-        )
 
 
 def _fill_form(raw: RawProduct) -> None:
-    """Заполняет поля формы данными товара в формате входного JSON."""
-    _clear_upload_messages()
-    st.session_state[NAME_KEY] = _as_text(raw.get("name"))
-    st.session_state[MANUFACTURER_KEY] = _as_text(raw.get("manufacturer"))
-    st.session_state[DESCRIPTION_KEY] = _as_text(raw.get("description"))
-    specs = raw.get("specs")
-    rows = (
-        [{SPEC_NAME: key, SPEC_VALUE: _as_text(value)} for key, value in specs.items()]
-        if isinstance(specs, dict)
-        else []
-    )
+    """Раскладывает товар по полям формы."""
+    st.session_state[UPLOAD_ERROR_KEY] = None
+    st.session_state[NAME_KEY] = raw.name
+    st.session_state[MANUFACTURER_KEY] = raw.manufacturer
+    st.session_state[DESCRIPTION_KEY] = raw.description
+    rows = [{SPEC_NAME: name, SPEC_VALUE: value} for name, value in raw.specs.items()]
     st.session_state[SPECS_KEY] = rows or EMPTY_SPECS
     st.session_state[SPECS_EDITOR_VERSION_KEY] = (
         st.session_state.get(SPECS_EDITOR_VERSION_KEY, 0) + 1
     )
     st.session_state[RESULT_KEY] = None
-
-
-def _clear_upload_messages() -> None:
-    st.session_state[UPLOAD_ERROR_KEY] = None
-    st.session_state[UPLOAD_NOTE_KEY] = None
-
-
-def _as_text(value: object) -> str:
-    return "" if value is None else str(value)
 
 
 # --- Генерация и результат --------------------------------------------------

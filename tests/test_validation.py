@@ -7,7 +7,7 @@ from core.validation import (
     normalize_product,
     parse_json,
 )
-from factories import manometer
+from factories import manometer, manometer_data, raw_product
 
 
 def test_invalid_json_reports_position():
@@ -15,26 +15,36 @@ def test_invalid_json_reports_position():
         parse_json('{"name": "x",}')
 
 
-@pytest.mark.parametrize("text", ["", "   ", "[]"])
+@pytest.mark.parametrize("text", ["", "   "])
 def test_empty_input_rejected(text):
     with pytest.raises(InputError):
         parse_json(text)
 
 
-@pytest.mark.parametrize("text", ['["строка"]', "42"])
+@pytest.mark.parametrize("text", ['[{"name": "a"}]', '["строка"]', "42"])
 def test_non_object_rejected(text):
     with pytest.raises(InputError, match="объектом"):
         parse_json(text)
 
 
-def test_array_of_products():
-    assert len(parse_json('[{"name": "a"}, {"name": "b"}]')) == 2
+def test_one_product_parsed():
+    raw = parse_json('{"name": "Манометр", "specs": {"класс точности": "1,5"}}')
+    assert raw.name == "Манометр"
+    assert raw.specs == {"класс точности": "1,5"}
 
 
-@pytest.mark.parametrize("name", [None, "", "   "])
+@pytest.mark.parametrize(
+    "text", ['{"name": null}', '{"name": "x", "specs": {"класс точности": 1.5}}']
+)
+def test_non_string_values_rejected(text):
+    with pytest.raises(InputError, match="строкой"):
+        parse_json(text)
+
+
+@pytest.mark.parametrize("name", ["", "   "])
 def test_name_required(name):
     with pytest.raises(InputError, match="name"):
-        normalize_product({"name": name})
+        normalize_product(raw_product({"name": name}))
 
 
 def test_complete_product_has_no_empty_fields():
@@ -46,17 +56,19 @@ def test_complete_product_has_no_empty_fields():
 
 def test_empty_values_listed_by_name():
     parsed = normalize_product(
-        {
-            "name": "  Термометр ТБ-63 ",
-            "manufacturer": "",
-            "description": None,
-            "specs": {
-                "диапазон измерений": "0…120 °C",
-                "класс точности": None,
-                "длина": "  ",
-            },
-            "price": 100,
-        }
+        raw_product(
+            {
+                "name": "  Термометр ТБ-63 ",
+                "manufacturer": "",
+                "description": "",
+                "specs": {
+                    "диапазон измерений": "0…120 °C",
+                    "класс точности": "",
+                    "длина": "  ",
+                },
+                "price": 100,
+            }
+        )
     )
     assert parsed.product.name == "Термометр ТБ-63"
     assert parsed.product.manufacturer is None
@@ -71,20 +83,13 @@ def test_empty_values_listed_by_name():
 
 
 def test_missing_specs_listed_as_empty_field():
-    parsed = normalize_product({"name": "Манометр"})
+    parsed = normalize_product(raw_product({"name": "Манометр"}))
     assert "Характеристики" in parsed.empty_fields
 
 
 def test_specs_must_be_object():
     with pytest.raises(InputError, match="specs"):
-        normalize_product({"name": "x", "specs": "0–1,6 МПа"})
-
-
-def test_non_string_spec_values_are_converted():
-    parsed = normalize_product(
-        {"name": "x", "specs": {"класс точности": 1.5, "среда": ["вода", "", "пар"]}}
-    )
-    assert parsed.product.specs == {"класс точности": "1.5", "среда": "вода, пар"}
+        parse_json('{"name": "x", "specs": "0–1,6 МПа"}')
 
 
 def test_profile_and_missing_fields():
@@ -101,15 +106,17 @@ def test_complete_manometer_passes_required_check():
 
 
 def test_missing_required_spec_rejected():
-    raw = manometer()
+    raw = manometer_data()
     del raw["specs"]["присоединение"]
     with pytest.raises(InputError, match=r"Манометр.*Присоединение"):
-        ensure_required_specs(normalize_product(raw).product)
+        ensure_required_specs(normalize_product(raw_product(raw)).product)
 
 
 def test_required_error_lists_all_missing_specs():
     product = normalize_product(
-        {"name": "Датчик давления ПД-1", "specs": {"диапазон измерений": "0–1 МПа"}}
+        raw_product(
+            {"name": "Датчик давления ПД-1", "specs": {"диапазон измерений": "0–1 МПа"}}
+        )
     ).product
     with pytest.raises(InputError) as error:
         ensure_required_specs(product)
@@ -120,30 +127,32 @@ def test_required_error_lists_all_missing_specs():
 
 
 def test_empty_required_value_counts_as_missing():
-    # «класс точности»: null — то же, что отсутствие характеристики
-    raw = {
-        "name": "Термометр ТБ-63",
-        "specs": {"диапазон измерений": "0…120 °C", "класс точности": None},
-    }
+    # Пустой «класс точности» — то же, что отсутствие характеристики
+    raw = raw_product(
+        {
+            "name": "Термометр ТБ-63",
+            "specs": {"диапазон измерений": "0…120 °C", "класс точности": ""},
+        }
+    )
     with pytest.raises(InputError, match="Класс точности"):
         ensure_required_specs(normalize_product(raw).product)
 
 
 def test_unknown_category_uses_default_profile():
-    product = normalize_product({"name": "Анализатор газа АГ-1"}).product
+    product = normalize_product(raw_product({"name": "Анализатор газа АГ-1"})).product
     assert detect_profile(product).title == "Контрольно-измерительный прибор"
 
 
 def test_alias_matches_only_at_word_start():
     # «ду» (Ду, условный проход) не должно находиться внутри «градуировка»
     product = normalize_product(
-        {"name": "Расходомер Р-1", "specs": {"градуировка": "есть"}}
+        raw_product({"name": "Расходомер Р-1", "specs": {"градуировка": "есть"}})
     ).product
     assert "Диаметр условного прохода (DN)" in find_missing(
         product, detect_profile(product)
     )
     product = normalize_product(
-        {"name": "Расходомер Р-1", "specs": {"Ду": "50"}}
+        raw_product({"name": "Расходомер Р-1", "specs": {"Ду": "50"}})
     ).product
     assert "Диаметр условного прохода (DN)" not in find_missing(
         product, detect_profile(product)

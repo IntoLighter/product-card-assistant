@@ -1,7 +1,7 @@
 from core.models import MISSING, ProductCard
 from core.pipeline import generate_card
 from core.render import to_json, to_markdown, to_text
-from factories import FakeLLM, make_draft, manometer
+from factories import FakeLLM, make_draft, manometer, manometer_data, raw_product
 
 
 def build_card(*drafts):
@@ -32,9 +32,9 @@ def test_markdown_shows_unresolved_warnings():
 
 
 def test_table_cells_escaped():
-    raw = manometer()
+    raw = manometer_data()
     raw["specs"]["исполнение"] = "общепромышленное | коррозионностойкое"
-    card = generate_card(raw, FakeLLM(make_draft()))
+    card = generate_card(raw_product(raw), FakeLLM(make_draft()))
     assert "общепромышленное \\| коррозионностойкое" in to_markdown(card)
 
 

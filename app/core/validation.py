@@ -7,20 +7,33 @@
 в карточку как «требует уточнения».
 """
 
-import json
+import re
 from dataclasses import dataclass
-from typing import Any
+
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from core.models import ProductInput
 from core.profiles import detect_profile, find_missing_required
 
-KNOWN_FIELDS = frozenset({"name", "manufacturer", "specs", "description"})
-
-type RawProduct = dict[str, Any]
-
 
 class InputError(Exception):
     """Входные данные нельзя обработать."""
+
+
+class RawProduct(BaseModel):
+    """
+    Товар в формате входного JSON: из файла, из шаблона или из формы.
+
+    Обязательность полей здесь не проверяется: это делает normalize_product.
+    """
+
+    # Неизвестные поля не ошибка: о них сообщается в карточке
+    model_config = ConfigDict(extra="allow", frozen=True)
+
+    name: str = ""
+    manufacturer: str = ""
+    specs: dict[str, str] = {}
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -34,39 +47,25 @@ class ParsedProduct:
     ignored_fields: list[str]
 
 
-def parse_json(text: str) -> list[RawProduct]:
-    """Текст JSON -> список товаров. Принимает один объект или массив объектов."""
+def parse_json(text: str) -> RawProduct:
+    """Текст JSON с одним товаром -> RawProduct."""
     if not text.strip():
         raise InputError("Пустой ввод: вставьте JSON с данными о товаре.")
     try:
-        data = json.loads(text)
-    except json.JSONDecodeError as error:
-        raise InputError(
-            f"Некорректный JSON: {error.msg} "
-            f"(строка {error.lineno}, столбец {error.colno})."
-        ) from error
-
-    items = data if isinstance(data, list) else [data]
-    if not items:
-        raise InputError("Пустой массив: нет ни одного товара.")
-    for number, item in enumerate(items, start=1):
-        if not isinstance(item, dict):
-            where = f"Элемент №{number}" if isinstance(data, list) else "Корень JSON"
-            raise InputError(
-                f"{where} должен быть объектом {{...}}, а не {type(item).__name__}."
-            )
-    return items
+        return RawProduct.model_validate_json(text)
+    except ValidationError as error:
+        raise InputError(_describe(error)) from error
 
 
 def normalize_product(raw: RawProduct) -> ParsedProduct:
-    """Сырой объект товара -> нормализованные данные и список пустых полей."""
-    name = _to_text(raw.get("name"))
-    if name is None:
+    """Товар из входа -> нормализованные данные и список пустых полей."""
+    name = raw.name.strip()
+    if not name:
         raise InputError("Не заполнено обязательное поле «name» (название товара).")
 
-    manufacturer = _to_text(raw.get("manufacturer"))
-    description = _to_text(raw.get("description"))
-    specs, empty_specs = _parse_specs(raw.get("specs"))
+    manufacturer = raw.manufacturer.strip() or None
+    description = raw.description.strip() or None
+    specs, empty_specs = _split_specs(raw.specs)
     empty_fields = [
         *(["Производитель"] if manufacturer is None else []),
         *(["Описание"] if description is None else []),
@@ -78,7 +77,7 @@ def normalize_product(raw: RawProduct) -> ParsedProduct:
             name=name, manufacturer=manufacturer, specs=specs, description=description
         ),
         empty_fields=empty_fields,
-        ignored_fields=sorted(raw.keys() - KNOWN_FIELDS),
+        ignored_fields=sorted(raw.model_extra or {}),
     )
 
 
@@ -93,37 +92,45 @@ def ensure_required_specs(product: ProductInput) -> None:
         )
 
 
-def _parse_specs(raw_specs: object) -> tuple[dict[str, str], list[str]]:
+def _split_specs(raw_specs: dict[str, str]) -> tuple[dict[str, str], list[str]]:
     """Характеристики с непустыми значениями и названия характеристик с пустыми."""
-    if raw_specs is None or raw_specs == {}:
+    if not raw_specs:
         return {}, ["Характеристики"]
-    if not isinstance(raw_specs, dict):
-        raise InputError(
-            'Поле «specs» должно быть объектом вида {"характеристика": "значение"}.'
-        )
 
     specs: dict[str, str] = {}
     empty: list[str] = []
     for raw_name, raw_value in raw_specs.items():
-        name = _to_text(raw_name)
-        if name is None:
+        name = raw_name.strip()
+        value = raw_value.strip()
+        if not name:
             continue
-        value = _to_text(raw_value)
-        if value is None:
+        if not value:
             empty.append(name)
         else:
             specs[name] = value
     return specs, empty
 
 
-def _to_text(value: object) -> str | None:
-    """Значение из JSON -> непустая строка без крайних пробелов или None."""
-    if value is None:
-        return None
-    if isinstance(value, dict):
-        text = "; ".join(f"{key}: {item}" for key, item in value.items())
-    elif isinstance(value, list | tuple):
-        text = ", ".join(part for item in value if (part := str(item).strip()))
-    else:
-        text = str(value)
-    return text.strip() or None
+def _describe(error: ValidationError) -> str:
+    """Первая ошибка разбора понятным пользователю текстом."""
+    first = error.errors()[0]
+    match first["type"], first["loc"]:
+        case "json_invalid", _:
+            reason = re.sub(
+                r" at line (\d+) column (\d+)$",
+                r" (строка \1, столбец \2)",
+                first["ctx"]["error"],
+            )
+            return f"Некорректный JSON: {reason}."
+        case "model_type", ():
+            return "JSON должен быть объектом {...} с данными одного товара."
+        case "dict_type", ("specs",):
+            return (
+                'Поле «specs» должно быть объектом вида {"характеристика": "значение"}.'
+            )
+        case "string_type", loc:
+            where = ".".join(str(part) for part in loc)
+            return f"Поле «{where}» должно быть строкой."
+        case _, loc:
+            where = ".".join(str(part) for part in loc)
+            return f"Поле «{where}»: {first['msg']}."

@@ -4,7 +4,7 @@ from core.llm import LLMError, LLMOutputError
 from core.models import MISSING
 from core.pipeline import generate_card
 from core.validation import InputError
-from factories import FakeLLM, make_draft, manometer
+from factories import FakeLLM, make_draft, manometer, manometer_data, raw_product
 
 
 def test_card_combines_input_and_draft():
@@ -33,14 +33,14 @@ def test_missing_specs_marked():
 
 
 def test_clarifications_list_empty_and_missing_fields_once():
-    raw = manometer()
+    raw = manometer_data()
     raw["manufacturer"] = ""
     raw["specs"]["измеряемая среда"] = (
         ""  # пустая во входе и недостающая рекомендуемая одновременно
     )
     raw["warehouse"] = "Москва"
 
-    card = generate_card(raw, FakeLLM(make_draft()))
+    card = generate_card(raw_product(raw), FakeLLM(make_draft()))
 
     assert card.manufacturer == MISSING
     assert card.specs[0].is_missing
@@ -53,12 +53,12 @@ def test_clarifications_list_empty_and_missing_fields_once():
 
 
 def test_missing_required_specs_stop_before_llm():
-    raw = manometer()
+    raw = manometer_data()
     del raw["specs"]["класс точности"]
     llm = FakeLLM(make_draft())
 
     with pytest.raises(InputError, match="Класс точности"):
-        generate_card(raw, llm)
+        generate_card(raw_product(raw), llm)
     assert llm.calls == []
 
 

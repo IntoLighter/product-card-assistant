@@ -11,18 +11,19 @@ from core.profiles import (
 )
 from core.resources import templates_dir
 from core.templates import OTHER_DEVICE_LABEL, ProductTemplate, load_templates
-from core.validation import ensure_required_specs, normalize_product
+from core.validation import RawProduct, ensure_required_specs, normalize_product
 
 TEMPLATES = load_templates()
 
 
-def filled(raw):
+def filled(raw: RawProduct) -> RawProduct:
     """Шаблон с вписанными значениями (у «Другого прибора» — и название)."""
-    return {
-        **raw,
-        "name": raw["name"] or "Прибор",
-        "specs": dict.fromkeys(raw["specs"], "значение"),
-    }
+    return raw.model_copy(
+        update={
+            "name": raw.name or "Прибор",
+            "specs": dict.fromkeys(raw.specs, "значение"),
+        }
+    )
 
 
 @pytest.mark.parametrize(
@@ -41,10 +42,10 @@ def test_template_becomes_form_data_with_empty_values():
     template = ProductTemplate(
         name="Манометр", specs=["Диапазон измерений", "Класс точности"]
     )
-    assert template.to_raw_product() == {
-        "name": "Манометр",
-        "specs": {"Диапазон измерений": "", "Класс точности": ""},
-    }
+    assert template.to_raw_product() == RawProduct(
+        name="Манометр",
+        specs={"Диапазон измерений": "", "Класс точности": ""},
+    )
 
 
 def test_invalid_template_rejected():
@@ -83,7 +84,7 @@ def test_template_contains_exactly_required_specs(label):
 
 def test_empty_template_blocks_generation():
     product = normalize_product(
-        {**TEMPLATES["Манометр"], "name": "Манометр ДМ-1"}
+        TEMPLATES["Манометр"].model_copy(update={"name": "Манометр ДМ-1"})
     ).product
     assert len(find_missing_required(product, detect_profile(product))) == 3
 

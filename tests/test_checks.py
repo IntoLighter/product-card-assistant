@@ -3,7 +3,13 @@ import pytest
 from core.checks import check_draft
 from core.models import Commercial
 from core.validation import normalize_product
-from factories import GOOD_DESCRIPTION, make_draft, manometer
+from factories import (
+    GOOD_DESCRIPTION,
+    make_draft,
+    manometer,
+    manometer_data,
+    raw_product,
+)
 
 
 def check(draft, raw=None):
@@ -105,11 +111,12 @@ def test_pronoun_tu_is_not_a_standard():
 
 
 def test_risky_term_allowed_when_in_input():
-    raw = manometer()
+    raw = manometer_data()
     raw["specs"]["степень защиты"] = "IP65"
     assert (
         check(
-            make_draft(seo_description=GOOD_DESCRIPTION + " Степень защиты IP65."), raw
+            make_draft(seo_description=GOOD_DESCRIPTION + " Степень защиты IP65."),
+            raw_product(raw),
         )
         == []
     )
