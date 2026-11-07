@@ -1,0 +1,14 @@
+{
+    "containers.commands.composeUp": [
+        {
+            "label": "Compose Up",
+            "template": "${composeCommand} -f docker-compose.yml -f docker-compose.debug.yml up ${detached} ${build}",
+        },
+    ],
+    "containers.commands.composeUpSubset": [
+        {
+            "label": "Compose Up",
+            "template": "${composeCommand} ${profileList} -f docker-compose.yml -f docker-compose.debug.yml up ${detached} ${build} ${serviceList}",
+        },
+    ],
+}

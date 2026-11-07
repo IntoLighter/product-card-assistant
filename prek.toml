@@ -14,7 +14,7 @@ hooks = [
 
   # Syntax
   { id = "check-json", exclude = '^\.vscode/' },
-  { id = "check-jsonc", files = '^\.vscode/.*\.json$', types = ["json"] },
+  { id = "check-jsonc", args = ["--allow-trailing-commas"], files = '^\.vscode/.*\.json$', types = ["json"] },
   { id = "check-json5" },
   { id = "check-toml" },
   { id = "check-yaml" },
