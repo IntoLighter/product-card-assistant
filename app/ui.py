@@ -165,6 +165,8 @@ def _generation_blocked_reason(raw: RawProduct) -> str | None:
     Обязательны название и характеристики, обязательные по профилю категории;
     прочие пробелы сервис не запрещает, а помечает «данных нет».
     """
+    if not raw.name:
+        return "Заполните обязательное поле «Название»."
     try:
         ensure_required_specs(normalize_product(raw).product)
     except InputError as error:

@@ -11,7 +11,7 @@
 
 import logging
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from openai.types.chat import ChatCompletionMessageParam
 
@@ -98,7 +98,7 @@ def generate_checked_draft(
 
     Возвращает лучший ответ (с наименьшим числом замечаний) из max_attempts попыток.
     """
-    best: tuple[LLMDraft, list[Issue]] | None = None
+    best: CheckedDraft | None = None
     attempts = 0
     for attempt in range(max_attempts):
         attempts += 1
@@ -115,8 +115,8 @@ def generate_checked_draft(
             len(problems),
             [p.message for p in problems],
         )
-        if best is None or len(problems) < len(best[1]):
-            best = (draft, problems)
+        if best is None or len(problems) < len(best.problems):
+            best = CheckedDraft(draft=draft, problems=problems, attempts=attempts)
         if not problems:
             break
         messages = build_fix_messages(messages, draft.model_dump_json(), problems)
@@ -126,8 +126,8 @@ def generate_checked_draft(
             "Модель не вернула корректный ответ "
             f"ни в одной из {attempts} попыток. Попробуйте ещё раз."
         )
-    draft, problems = best
-    return CheckedDraft(draft=draft, problems=problems, attempts=attempts)
+    # attempts — сколько попыток потрачено всего, а не номер лучшей
+    return replace(best, attempts=attempts)
 
 
 def build_specs(product: ProductInput, missing: list[str]) -> list[SpecRow]:
