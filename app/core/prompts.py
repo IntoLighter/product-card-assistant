@@ -23,17 +23,17 @@ from core.models import (
     Issue,
     ProductInput,
 )
-from core.profiles import Profile
 from core.resources import prompts_dir
+from core.templates import ProductTemplate
 
 
 def build_messages(
-    product: ProductInput, profile: Profile, missing: list[str]
+    product: ProductInput, template: ProductTemplate, missing: list[str]
 ) -> list[ChatCompletionMessageParam]:
     """Первый запрос: системные правила и данные о товаре."""
     return [
         {"role": "system", "content": system_prompt()},
-        {"role": "user", "content": user_prompt(product, profile, missing)},
+        {"role": "user", "content": user_prompt(product, template, missing)},
     ]
 
 
@@ -68,7 +68,9 @@ def system_prompt() -> str:
     )
 
 
-def user_prompt(product: ProductInput, profile: Profile, missing: list[str]) -> str:
+def user_prompt(
+    product: ProductInput, template: ProductTemplate, missing: list[str]
+) -> str:
     data = {
         "название": product.name,
         "производитель": product.manufacturer or MISSING,
@@ -77,7 +79,7 @@ def user_prompt(product: ProductInput, profile: Profile, missing: list[str]) -> 
     }
     return _template("user").substitute(
         data=json.dumps(data, ensure_ascii=False, indent=2),
-        category=profile.title,
+        category=template.category,
         missing=_bullets(missing) or "- (нет)",
     )
 

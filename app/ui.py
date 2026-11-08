@@ -12,13 +12,12 @@ import streamlit as st
 
 from core.config import Settings
 from core.llm import LLMError, OpenAICompatibleClient
-from core.models import ProductCard
+from core.models import ProductCard, RawProduct
 from core.pipeline import generate_card
 from core.render import to_json, to_markdown, to_text
 from core.templates import load_templates
 from core.validation import (
     InputError,
-    RawProduct,
     ensure_required_specs,
     normalize_product,
     parse_json,
@@ -55,10 +54,9 @@ def get_llm() -> OpenAICompatibleClient:
     return OpenAICompatibleClient(Settings())
 
 
-@st.cache_resource
 def get_templates() -> dict[str, RawProduct]:
-    """Шаблоны читаются один раз за запуск: после правки JSON перезапустите app."""
-    return load_templates()
+    """Шаблоны для формы: {подпись в списке: товар для формы}."""
+    return {template.label: template.to_raw_product() for template in load_templates()}
 
 
 def main() -> None:
@@ -151,7 +149,7 @@ def render_form() -> RawProduct:
     )
 
     specs = {
-        str(row[SPEC_NAME]).strip(): str(row.get(SPEC_VALUE) or "")
+        str(row[SPEC_NAME]): str(row.get(SPEC_VALUE) or "")
         for row in rows
         if row.get(SPEC_NAME)
     }
@@ -167,8 +165,6 @@ def _generation_blocked_reason(raw: RawProduct) -> str | None:
     Обязательны название и характеристики, обязательные по профилю категории;
     прочие пробелы сервис не запрещает, а помечает «данных нет».
     """
-    if not raw.name.strip():
-        return "Заполните обязательное поле «Название»."
     try:
         ensure_required_specs(normalize_product(raw).product)
     except InputError as error:

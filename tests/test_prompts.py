@@ -1,11 +1,11 @@
 from core.models import Issue
-from core.profiles import detect_profile
 from core.prompts import (
     build_fix_messages,
     build_messages,
     system_prompt,
     user_prompt,
 )
+from core.templates import detect_template
 from core.validation import normalize_product
 from factories import manometer, manometer_data, raw_product
 
@@ -22,7 +22,7 @@ def test_user_prompt_contains_data_and_missing_fields():
     raw["manufacturer"] = ""
     product = normalize_product(raw_product(raw)).product
 
-    prompt = user_prompt(product, detect_profile(product), ["Измеряемая среда"])
+    prompt = user_prompt(product, detect_template(product), ["Измеряемая среда"])
 
     assert '"класс точности": "1,5"' in prompt
     assert '"производитель": "данных нет"' in prompt
@@ -32,7 +32,7 @@ def test_user_prompt_contains_data_and_missing_fields():
 
 def test_fix_messages_extend_conversation():
     product = normalize_product(manometer()).product
-    messages = build_messages(product, detect_profile(product), [])
+    messages = build_messages(product, detect_template(product), [])
 
     fixed = build_fix_messages(
         messages,

@@ -10,30 +10,14 @@
 import re
 from dataclasses import dataclass
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import ValidationError
 
-from core.models import ProductInput
-from core.profiles import detect_profile, find_missing_required
+from core.models import ProductInput, RawProduct
+from core.templates import detect_template
 
 
 class InputError(Exception):
     """Входные данные нельзя обработать."""
-
-
-class RawProduct(BaseModel):
-    """
-    Товар в формате входного JSON: из файла, из шаблона или из формы.
-
-    Обязательность полей здесь не проверяется: это делает normalize_product.
-    """
-
-    # Неизвестные поля не ошибка: о них сообщается в карточке
-    model_config = ConfigDict(extra="allow", frozen=True)
-
-    name: str = ""
-    manufacturer: str = ""
-    specs: dict[str, str] = {}
-    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -41,8 +25,6 @@ class ParsedProduct:
     """Нормализованный товар и всё, что о входе стоит сообщить пользователю."""
 
     product: ProductInput
-    # Названия полей, которые во входе пустые:
-    # «Производитель», «Описание», «Класс точности»
     empty_fields: list[str]
     ignored_fields: list[str]
 
@@ -59,22 +41,27 @@ def parse_json(text: str) -> RawProduct:
 
 def normalize_product(raw: RawProduct) -> ParsedProduct:
     """Товар из входа -> нормализованные данные и список пустых полей."""
-    name = raw.name.strip()
-    if not name:
+    if not raw.name:
         raise InputError("Не заполнено обязательное поле «name» (название товара).")
 
-    manufacturer = raw.manufacturer.strip() or None
-    description = raw.description.strip() or None
     specs, empty_specs = _split_specs(raw.specs)
-    empty_fields = [
-        *(["Производитель"] if manufacturer is None else []),
-        *(["Описание"] if description is None else []),
-        *empty_specs,
-    ]
+
+    empty_fields = []
+
+    if not raw.manufacturer:
+        empty_fields.append("Производитель")
+
+    if not raw.description:
+        empty_fields.append("Описание")
+
+    empty_fields.extend(empty_specs)
 
     return ParsedProduct(
         product=ProductInput(
-            name=name, manufacturer=manufacturer, specs=specs, description=description
+            name=raw.name,
+            manufacturer=raw.manufacturer,
+            specs=specs,
+            description=raw.description,
         ),
         empty_fields=empty_fields,
         ignored_fields=sorted(raw.model_extra or {}),
@@ -82,13 +69,13 @@ def normalize_product(raw: RawProduct) -> ParsedProduct:
 
 
 def ensure_required_specs(product: ProductInput) -> None:
-    """InputError, если не заполнены обязательные для категории характеристики."""
-    profile = detect_profile(product)
-    missing = find_missing_required(product, profile)
+    """InputError, если не заполнены обязательные по шаблону характеристики."""
+    template = detect_template(product)
+    missing = template.find_missing_required(product)
     if missing:
         raise InputError(
-            f"Для категории «{profile.title}» заполните обязательные характеристики: "
-            f"{', '.join(missing)}."
+            f"Для категории «{template.category}» заполните "
+            f"обязательные характеристики: {', '.join(missing)}."
         )
 
 
@@ -99,9 +86,7 @@ def _split_specs(raw_specs: dict[str, str]) -> tuple[dict[str, str], list[str]]:
 
     specs: dict[str, str] = {}
     empty: list[str] = []
-    for raw_name, raw_value in raw_specs.items():
-        name = raw_name.strip()
-        value = raw_value.strip()
+    for name, value in raw_specs.items():
         if not name:
             continue
         if not value:

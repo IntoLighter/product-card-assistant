@@ -19,13 +19,31 @@ QUERIES_MAX = 5
 COMMERCIAL_ITEMS_MAX = 4
 
 
+class RawProduct(BaseModel):
+    """
+    Товар в формате входного JSON: из файла, из шаблона или из формы.
+
+    Пробелы по краям строк, в том числе в ключах и значениях specs, обрезаются
+    при создании. Обязательность полей здесь не проверяется:
+    это делает normalize_product.
+    """
+
+    # Неизвестные поля не ошибка: о них сообщается в карточке
+    model_config = ConfigDict(extra="allow", frozen=True, str_strip_whitespace=True)
+
+    name: str = ""
+    manufacturer: str = ""
+    specs: dict[str, str] = {}
+    description: str = ""
+
+
 class ProductInput(BaseModel):
-    """Нормализованные входные данные: без лишних пробелов и пустых значений."""
+    """Нормализованные входные данные: без лишних пробелов и пустых характеристик."""
 
     name: str
-    manufacturer: str | None = None
+    manufacturer: str = ""
     specs: dict[str, str] = Field(default_factory=dict)
-    description: str | None = None
+    description: str = ""
 
 
 class Issue(BaseModel):
