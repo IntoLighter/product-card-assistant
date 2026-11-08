@@ -7,9 +7,8 @@ hooks = [
   # Fixers
   { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md"] },
   { id = "end-of-file-fixer" },
-  { id = "mixed-line-ending" },
+  { id = "mixed-line-ending", args = ["--fix=lf"] },
   { id = "fix-byte-order-marker" },
-  # --no-ensure-ascii: иначе кириллица в JSON превращается в \uXXXX
   { id = "pretty-format-json", args = ["--no-sort-keys", "--no-ensure-ascii", "--autofix"], exclude = '^\.vscode/' },
 
   # Syntax
