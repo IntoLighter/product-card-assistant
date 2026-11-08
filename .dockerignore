@@ -1,6 +1,6 @@
 .git
 .venv
-.env_secrets
+.env
 .pytest_cache
 __pycache__
 *.pyc

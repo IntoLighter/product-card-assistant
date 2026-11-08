@@ -1,23 +1,30 @@
 name: product-card-assistant
 
-# Значения переменных — из .env (compose читает его сам), секреты — из .env_secrets
+# Переменные контейнеров: публичные — из .env.public, секреты — из .env.
+#
+# ${...} в этом файле не используются: compose подставляет их только из .env,
+# а там лишь секреты. Поэтому команда vLLM читает переменные внутри контейнера.
 x-env-files: &env-files
+  - path: .env.public
   - path: .env
-  - path: .env_secrets
     required: false
 
 services:
   vllm:
-    image: vllm/vllm-openai:${VLLM_IMAGE_TAG}
-    command: >-
-      --model=${VLLM_MODEL}
-      --served-model-name=${LLM_MODEL}
-      --max-model-len=${VLLM_MAX_MODEL_LEN}
-      --gpu-memory-utilization=${VLLM_GPU_MEMORY_UTILIZATION}
-      --max-num-seqs=${VLLM_MAX_NUM_SEQS}
-      --reasoning-parser=qwen3
-      --language-model-only
-      ${VLLM_EXTRA_ARGS}
+    image: vllm/vllm-openai:v0.28.0
+    # $$ — переменную раскрывает shell в контейнере, а не compose
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        exec vllm serve
+        --model="$$VLLM_MODEL"
+        --served-model-name="$$LLM_MODEL"
+        --max-model-len="$$VLLM_MAX_MODEL_LEN"
+        --gpu-memory-utilization="$$VLLM_GPU_MEMORY_UTILIZATION"
+        --max-num-seqs="$$VLLM_MAX_NUM_SEQS"
+        --reasoning-parser=qwen3
+        --language-model-only
+        $$VLLM_EXTRA_ARGS
     env_file: *env-files
     volumes:
       - hf-cache:/root/.cache/huggingface
@@ -37,7 +44,7 @@ services:
     build: .
     env_file: *env-files
     environment:
-      # Адрес vLLM внутри сети Docker (в .env — адрес для запуска вне Docker)
+      # Адрес vLLM внутри сети Docker (в .env.public — адрес для запуска вне Docker)
       - LLM_BASE_URL=http://vllm:8000/v1
     volumes:
       - ./app:/srv/app
