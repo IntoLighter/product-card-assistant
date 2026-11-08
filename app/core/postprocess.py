@@ -31,15 +31,18 @@ def fit_description(
     """
     if len(text) <= max_len:
         return text
+
     paragraphs = [
         SENTENCE_BREAK.split(paragraph.strip())
         for paragraph in text.split("\n\n")
         if paragraph.strip()
     ]
+
     while paragraphs and len(_join(paragraphs)) > max_len:
         paragraphs[-1].pop()
         if not paragraphs[-1]:
             paragraphs.pop()
+
     fitted = _join(paragraphs)
     return fitted if len(fitted) >= min_len else text
 

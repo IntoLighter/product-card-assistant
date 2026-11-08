@@ -14,9 +14,10 @@ from pathlib import Path
 
 from core.config import Settings
 from core.llm import LLMClient, LLMError, OpenAICompatibleClient
+from core.models import RawProduct
 from core.pipeline import generate_card
 from core.render import to_json, to_markdown
-from core.validation import InputError, RawProduct, parse_json
+from core.validation import InputError, parse_json
 
 EXIT_OK = 0
 EXIT_HAS_FAILURES = 1

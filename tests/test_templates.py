@@ -1,46 +1,56 @@
-"""Шаблоны формы должны совпадать с обязательными характеристиками профилей."""
+"""Шаблоны приборов: формат файлов, выбор шаблона по названию, поиск недостающего."""
 
 import pytest
 from pydantic import ValidationError
 
-from core.profiles import (
-    DEFAULT_PROFILE,
-    PROFILES,
-    detect_profile,
-    find_missing_required,
-)
+from core.models import RawProduct
 from core.resources import templates_dir
-from core.templates import OTHER_DEVICE_LABEL, ProductTemplate, load_templates
-from core.validation import RawProduct, ensure_required_specs, normalize_product
+from core.templates import (
+    OTHER_DEVICE_LABEL,
+    ProductTemplate,
+    detect_template,
+    load_templates,
+)
+from core.validation import ensure_required_specs, normalize_product
+from factories import raw_product
 
 TEMPLATES = load_templates()
 
 
-def filled(raw: RawProduct) -> RawProduct:
-    """Шаблон с вписанными значениями (у «Другого прибора» — и название)."""
-    return raw.model_copy(
-        update={
-            "name": raw.name or "Прибор",
-            "specs": dict.fromkeys(raw.specs, "значение"),
-        }
-    )
+def product(name, specs=None):
+    return normalize_product(raw_product({"name": name, "specs": specs or {}})).product
 
 
 @pytest.mark.parametrize(
     "path", sorted(templates_dir().glob("*.json")), ids=lambda path: path.name
 )
 def test_template_file_format(path):
-    template = ProductTemplate.model_validate_json(
-        path.read_bytes()
-    )  # лишние ключи и не-список specs — ошибка
-    assert len(set(template.specs)) == len(template.specs), (
-        "характеристики в шаблоне повторяются"
+    # Лишние ключи, не-объект в required, нет category — ошибка
+    template = ProductTemplate.model_validate_json(path.read_bytes())
+    assert not template.required.keys() & template.recommended.keys(), (
+        "характеристика и обязательная, и рекомендуемая"
     )
 
 
-def test_template_becomes_form_data_with_empty_values():
+def test_invalid_template_rejected():
+    with pytest.raises(ValidationError):  # нет category
+        ProductTemplate.model_validate({"required": {"Класс точности": []}})
+    with pytest.raises(ValidationError):  # старый формат: список вместо объекта
+        ProductTemplate.model_validate(
+            {"category": "Манометр", "required": ["Класс точности"]}
+        )
+    with pytest.raises(ValidationError):  # неизвестный ключ
+        ProductTemplate.model_validate(
+            {"category": "Манометр", "required": {"Класс точности": []}, "price": 1}
+        )
+
+
+def test_template_becomes_form_data_with_required_specs():
     template = ProductTemplate(
-        name="Манометр", specs=["Диапазон измерений", "Класс точности"]
+        name="Манометр",
+        category="Манометр",
+        required={"Диапазон измерений": ["диапазон"], "Класс точности": []},
+        recommended={"Измеряемая среда": ["сред"]},
     )
     assert template.to_raw_product() == RawProduct(
         name="Манометр",
@@ -48,46 +58,66 @@ def test_template_becomes_form_data_with_empty_values():
     )
 
 
-def test_invalid_template_rejected():
-    with pytest.raises(ValidationError):
-        ProductTemplate.model_validate(
-            {"name": "Манометр", "specs": {"Класс точности": ""}}
-        )
-    with pytest.raises(ValidationError):
-        ProductTemplate.model_validate(
-            {"name": "Манометр", "specs": ["Класс точности"], "price": 100}
-        )
-
-
-def test_every_profile_has_exactly_one_template():
-    covered = [
-        detect_profile(normalize_product(filled(raw)).product)
-        for raw in TEMPLATES.values()
+def test_other_device_is_last_and_only_default():
+    assert TEMPLATES[-1].label == OTHER_DEVICE_LABEL
+    assert [template.label for template in TEMPLATES if not template.keywords] == [
+        OTHER_DEVICE_LABEL
     ]
-    for profile in (*PROFILES, DEFAULT_PROFILE):
-        assert covered.count(profile) == 1, profile.title
 
 
-@pytest.mark.parametrize("label", list(TEMPLATES))
-def test_template_contains_exactly_required_specs(label):
-    product = normalize_product(filled(TEMPLATES[label])).product
-    profile = detect_profile(product)
+@pytest.mark.parametrize(
+    ("name", "category"),
+    [
+        ("Вакуумметр ВП-100", "Манометр (показывающий прибор давления)"),
+        ("Датчик давления ПД-100", "Датчик (преобразователь) давления"),
+        ("Термопреобразователь ТС-1", "Датчик температуры / термометр"),
+        ("Счётчик воды СВ-15", "Расходомер / счётчик"),
+        ("Анализатор газа АГ-1", "Контрольно-измерительный прибор"),
+    ],
+)
+def test_template_detected_by_keywords(name, category):
+    assert detect_template(product(name)).category == category
 
-    assert find_missing_required(product, profile) == [], (
-        "в шаблоне не хватает обязательных характеристик"
-    )
-    assert len(product.specs) == len(profile.required), (
-        "в шаблоне есть лишние характеристики"
-    )
-    ensure_required_specs(product)
+
+@pytest.mark.parametrize("template", TEMPLATES, ids=lambda template: template.label)
+def test_filled_template_passes_required_check(template):
+    # Форма из шаблона с вписанными значениями — достаточно для генерации
+    name = template.name or "Прибор"
+    filled = product(name, dict.fromkeys(template.required, "значение"))
+    assert detect_template(filled) == template
+    ensure_required_specs(filled)
 
 
 def test_empty_template_blocks_generation():
-    product = normalize_product(
-        TEMPLATES["Манометр"].model_copy(update={"name": "Манометр ДМ-1"})
-    ).product
-    assert len(find_missing_required(product, detect_profile(product))) == 3
+    manometer = next(template for template in TEMPLATES if template.name == "Манометр")
+    raw = manometer.to_raw_product().model_copy(update={"name": "Манометр ДМ-1"})
+    filled = normalize_product(raw).product
+    assert len(manometer.find_missing_required(filled)) == len(manometer.required)
 
 
-def test_other_device_is_last():
-    assert list(TEMPLATES)[-1] == OTHER_DEVICE_LABEL
+def test_missing_lists_required_and_recommended():
+    manometer = product(
+        "Манометр ДМ-1",
+        {"диапазон измерений": "0–1,6 МПа", "класс точности": "1,5"},
+    )
+    missing = detect_template(manometer).find_missing(manometer)
+    assert "Диапазон измерений" not in missing
+    assert "Присоединение" in missing  # обязательная
+    assert "Измеряемая среда" in missing  # рекомендуемая
+
+
+def test_spec_recognized_by_alias():
+    sensor = product(
+        "Датчик давления ПД-1",
+        {"основная приведённая погрешность": "±0,5 %"},
+    )
+    assert "Класс точности" not in detect_template(sensor).find_missing(sensor)
+
+
+def test_alias_matches_only_at_word_start():
+    # «ду» (Ду, условный проход) не должно находиться внутри «градуировка»
+    dn = "Диаметр условного прохода (DN)"
+    flowmeter = product("Расходомер Р-1", {"градуировка": "есть"})
+    assert dn in detect_template(flowmeter).find_missing(flowmeter)
+    flowmeter = product("Расходомер Р-1", {"Ду": "50"})
+    assert dn not in detect_template(flowmeter).find_missing(flowmeter)

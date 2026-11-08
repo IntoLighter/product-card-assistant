@@ -7,8 +7,7 @@ from typing import Any, cast
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 
-from core.models import Commercial, LLMDraft
-from core.validation import RawProduct
+from core.models import Commercial, LLMDraft, RawProduct
 
 _MANOMETER: dict[str, Any] = {
     "name": "Манометр показывающий DM 02",

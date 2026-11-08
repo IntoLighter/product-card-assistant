@@ -24,12 +24,13 @@ from core.models import (
     LLMDraft,
     ProductCard,
     ProductInput,
+    RawProduct,
     SpecRow,
 )
 from core.postprocess import fit_draft
-from core.profiles import detect_profile, find_missing
 from core.prompts import build_fix_messages, build_messages
-from core.validation import RawProduct, ensure_required_specs, normalize_product
+from core.templates import detect_template
+from core.validation import ensure_required_specs, normalize_product
 
 log = logging.getLogger(__name__)
 
@@ -56,20 +57,18 @@ def generate_card(
     """
     parsed = normalize_product(raw)
     product = parsed.product
-    ensure_required_specs(
-        product
-    )  # до обращения к LLM: без обязательных данных генерировать нечего
-    profile = detect_profile(product)
-    missing = find_missing(product, profile)
+    ensure_required_specs(product)
+    template = detect_template(product)
+    missing = template.find_missing(product)
 
     result = generate_checked_draft(
-        llm, product, build_messages(product, profile, missing), max_attempts
+        llm, product, build_messages(product, template, missing), max_attempts
     )
     draft = result.draft
     return ProductCard(
         product_name=product.name,
         manufacturer=product.manufacturer or MISSING,
-        category=profile.title,
+        category=template.category,
         seo_title=draft.seo_title,
         seo_description=draft.seo_description,
         specs=build_specs(product, missing),
@@ -100,15 +99,13 @@ def generate_checked_draft(
     Возвращает лучший ответ (с наименьшим числом замечаний) из max_attempts попыток.
     """
     best: tuple[LLMDraft, list[Issue]] | None = None
-    conversation = messages
     attempts = 0
     for attempt in range(max_attempts):
         attempts += 1
         try:
-            draft = fit_draft(llm.generate(conversation, LLMDraft, attempt=attempt))
+            draft = fit_draft(llm.generate(messages, LLMDraft, attempt=attempt))
         except LLMOutputError as error:
             log.warning("Попытка %d: невалидный ответ модели (%s)", attempts, error)
-            conversation = messages
             continue
 
         problems = check_draft(draft, product)
@@ -122,7 +119,7 @@ def generate_checked_draft(
             best = (draft, problems)
         if not problems:
             break
-        conversation = build_fix_messages(messages, draft.model_dump_json(), problems)
+        messages = build_fix_messages(messages, draft.model_dump_json(), problems)
 
     if best is None:
         raise LLMError(
