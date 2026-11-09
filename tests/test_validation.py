@@ -14,13 +14,17 @@ def test_invalid_json_reports_position():
         parse_json('{"name": "x",}')
 
 
-@pytest.mark.parametrize("text", ["", "   "])
+@pytest.mark.parametrize("text", ["", "   "], ids=["empty", "spaces"])
 def test_empty_input_rejected(text):
     with pytest.raises(InputError):
         parse_json(text)
 
 
-@pytest.mark.parametrize("text", ['[{"name": "a"}]', '["строка"]', "42"])
+@pytest.mark.parametrize(
+    "text",
+    ['[{"name": "a"}]', '["строка"]', "42"],
+    ids=["list-of-objects", "list-of-strings", "number"],
+)
 def test_non_object_rejected(text):
     with pytest.raises(InputError, match="объектом"):
         parse_json(text)
@@ -33,14 +37,16 @@ def test_one_product_parsed():
 
 
 @pytest.mark.parametrize(
-    "text", ['{"name": null}', '{"name": "x", "specs": {"класс точности": 1.5}}']
+    "text",
+    ['{"name": null}', '{"name": "x", "specs": {"класс точности": 1.5}}'],
+    ids=["null-name", "number-spec"],
 )
 def test_non_string_values_rejected(text):
     with pytest.raises(InputError, match="строкой"):
         parse_json(text)
 
 
-@pytest.mark.parametrize("name", ["", "   "])
+@pytest.mark.parametrize("name", ["", "   "], ids=["empty", "spaces"])
 def test_name_required(name):
     with pytest.raises(InputError, match="name"):
         normalize_product(raw_product({"name": name}))

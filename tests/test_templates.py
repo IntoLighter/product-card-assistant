@@ -74,6 +74,13 @@ def test_other_device_is_last_and_only_default():
         ("Счётчик воды СВ-15", "Расходомер / счётчик"),
         ("Анализатор газа АГ-1", "Контрольно-измерительный прибор"),
     ],
+    ids=[
+        "vacuum-gauge",
+        "pressure-sensor",
+        "temperature-sensor",
+        "water-meter",
+        "unknown",
+    ],
 )
 def test_template_detected_by_keywords(name, category):
     assert detect_template(product(name)).category == category

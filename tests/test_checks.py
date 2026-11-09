@@ -32,6 +32,7 @@ def test_title_too_long():
 @pytest.mark.parametrize(
     ("description", "advice"),
     [("Коротко.", "Добавь ещё 8 предложений"), ("Д" * 1300, "Убери 2 предложения")],
+    ids=["too-short", "too-long"],
 )
 def test_description_length_advice_in_sentences(description, advice):
     issues = check(make_draft(seo_description=description))

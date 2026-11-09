@@ -72,6 +72,7 @@ root = [ "app", "tests" ]
 [tool.pytest.ini_options]
 testpaths = [ "tests" ]
 pythonpath = [ "app" ]
+disable_test_id_escaping_and_forfeit_all_rights_to_community_support = true
 
 [tool.rumdl]
 disable = [ "MD013" ]
