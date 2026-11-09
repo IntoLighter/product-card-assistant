@@ -52,6 +52,7 @@ def test_missing_variable_is_reported(env):
 @pytest.mark.parametrize(
     ("name", "value"),
     [("SEED", "abc"), ("MAX_ATTEMPTS", "0"), ("REQUEST_TIMEOUT", "-1")],
+    ids=["seed-not-number", "attempts-zero", "timeout-negative"],
 )
 def test_invalid_value_is_reported(env, name, value):
     env.setenv(name, value)
