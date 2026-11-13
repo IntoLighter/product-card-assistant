@@ -1,9 +1,9 @@
 """
 Настройки из переменных окружения (pydantic-settings).
 
-Публичные настройки лежат в одном месте — в файле .env.public в корне проекта
-(он хранится в git), ключи и токены — в .env (вне git). Приоритет: переменные
-окружения (например, из docker compose) > .env > .env.public. Без нужной
+Настройки лежат в одном месте — в файле .env в корне проекта (он хранится
+в git), ключи и токены — в .env.local (вне git). Приоритет: переменные
+окружения (например, из docker compose) > .env.local > .env. Без нужной
 переменной или с некорректным значением Settings() падает с ValidationError,
 где перечислены все проблемные поля.
 """
@@ -22,9 +22,9 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         # Более поздний файл перекрывает более ранний; отсутствующие файлы пропускаются
-        env_file=(PROJECT_ROOT / ".env.public", PROJECT_ROOT / ".env"),
+        env_file=(PROJECT_ROOT / ".env", PROJECT_ROOT / ".env.local"),
         env_file_encoding="utf-8",
-        # В .env.public есть и настройки vLLM и Streamlit — приложению они не нужны
+        # В .env есть и настройки vLLM и Streamlit — приложению они не нужны
         extra="ignore",
         frozen=True,
         # Имена полей — для кода и тестов, алиасы — имена переменных окружения
