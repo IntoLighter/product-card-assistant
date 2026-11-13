@@ -1,31 +1,9 @@
-# Отладка app: запускается поверх основного файла
-#
-#   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d --build app
-#
-# Streamlit работает под debugpy, отладчик подключается к localhost:5678
-# (в VS Code — конфигурация «Отладка app в Docker»). Вернуться к обычному режиму:
-#
-#   docker compose up -d app
-
 services:
   app:
-    build:
-      args:
-        UV_SYNC_EXTRA: --group debug
-    # Отдельный тег, чтобы отладочный образ не подменял обычный
-    image: product-card-assistant-app:debug
-    command:
-      - python
-      - -m
-      - debugpy
-      - --listen
-      - 0.0.0.0:5678
-      - -m
-      - streamlit
-      - run
-      - app/ui.py
-      - --server.address=0.0.0.0
-      - --server.port=8501
-      - --browser.gatherUsageStats=false
+    command: >-
+      sh -c "uv pip install --quiet debugpy
+      && exec python -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:5678
+      -m streamlit run app/ui.py
+      --server.address=0.0.0.0 --server.port=8501 --browser.gatherUsageStats=false"
     ports:
       - "5678:5678"

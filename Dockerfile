@@ -5,12 +5,9 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     PYTHONUNBUFFERED=1
 
-# Дополнительные группы зависимостей: отладочный образ передаёт "--group debug"
-ARG UV_SYNC_EXTRA=""
-
 # Сначала зависимости — слой кэшируется, пока не меняется uv.lock
 COPY pyproject.toml uv.lock .python-version ./
-RUN uv sync --frozen --no-dev ${UV_SYNC_EXTRA}
+RUN uv sync --frozen --no-dev
 ENV PATH="/srv/.venv/bin:$PATH"
 
 # Затем код и ресурсы: проект не устанавливается, Streamlit запускает app/ui.py

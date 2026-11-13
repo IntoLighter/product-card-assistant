@@ -19,9 +19,6 @@ dev = [
     "rumdl>=0.3.2",
     "ty>=0.0.96",
 ]
-debug = [
-    "debugpy>=1.8.22",
-]
 
 [tool.ruff]
 src = [ "app", "tests" ]
