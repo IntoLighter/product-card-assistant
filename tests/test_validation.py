@@ -38,12 +38,26 @@ def test_one_product_parsed():
 
 @pytest.mark.parametrize(
     "text",
-    ['{"name": null}', '{"name": "x", "specs": {"класс точности": 1.5}}'],
-    ids=["null-name", "number-spec"],
+    ['{"name": 42}', '{"name": "x", "specs": {"класс точности": 1.5}}'],
+    ids=["number-name", "number-spec"],
 )
 def test_non_string_values_rejected(text):
     with pytest.raises(InputError, match="строкой"):
         parse_json(text)
+
+
+def test_null_treated_as_empty():
+    raw = parse_json(
+        '{"name": "Термометр ТБ-63", "manufacturer": null, '
+        '"specs": {"класс точности": null}, "description": null}'
+    )
+    assert raw.manufacturer == ""
+    assert raw.description == ""
+    assert raw.specs == {"класс точности": ""}
+
+    parsed = normalize_product(raw)
+    assert "Производитель" in parsed.empty_fields
+    assert "класс точности" in parsed.empty_fields
 
 
 @pytest.mark.parametrize("name", ["", "   "], ids=["empty", "spaces"])
