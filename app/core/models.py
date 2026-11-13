@@ -1,11 +1,13 @@
 """
 Модели данных: вход, ответ LLM и итоговая карточка.
 
-Ограничения из ТЗ (длины текстов, число запросов) объявлены здесь один раз:
+Требования к карточке (длины текстов, число запросов) объявлены здесь один раз:
 их используют JSON-схема ответа, промпт и автоматическая проверка.
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 MISSING = "данных нет"
 
@@ -24,8 +26,8 @@ class RawProduct(BaseModel):
     Товар в формате входного JSON: из файла, из шаблона или из формы.
 
     Пробелы по краям строк, в том числе в ключах и значениях specs, обрезаются
-    при создании. Обязательность полей здесь не проверяется:
-    это делает normalize_product.
+    при создании, null считается пустым значением. Обязательность полей здесь
+    не проверяется: это делает normalize_product.
     """
 
     # Неизвестные поля не ошибка: о них сообщается в карточке
@@ -35,6 +37,20 @@ class RawProduct(BaseModel):
     manufacturer: str = ""
     specs: dict[str, str] = {}
     description: str = ""
+
+    @field_validator("name", "manufacturer", "description", mode="before")
+    @classmethod
+    def _null_to_empty(cls, value: Any) -> Any:
+        return "" if value is None else value
+
+    @field_validator("specs", mode="before")
+    @classmethod
+    def _null_specs_to_empty(cls, value: Any) -> Any:
+        if value is None:
+            return {}
+        if isinstance(value, dict):
+            return {key: "" if item is None else item for key, item in value.items()}
+        return value  # не объект — ошибку типа сообщит основная валидация
 
 
 class ProductInput(BaseModel):
