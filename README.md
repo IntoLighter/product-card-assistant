@@ -219,7 +219,7 @@ uv run pytest              # тесты
 uv run prek run -a         # все проверки: ruff, ty, форматирование, тесты
 ```
 
-Отладка в контейнере: `docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d --build app` запускает интерфейс под debugpy на порту 5678. В VS Code для подключения есть конфигурация «Отладка app в Docker».
+Отладка в контейнере: `docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d app` запускает интерфейс под debugpy на порту 5678. В VS Code для подключения есть конфигурация «Отладка app в Docker».
 
 ## Лицензия
 
