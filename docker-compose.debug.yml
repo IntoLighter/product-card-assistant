@@ -1,9 +1,15 @@
 services:
+  vllm:
+    restart: no
+
   app:
+    restart: no
     command: >-
       sh -c "uv pip install --quiet debugpy
       && exec python -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:5678
-      -m streamlit run app/ui.py
-      --server.address=0.0.0.0 --server.port=8501 --browser.gatherUsageStats=false"
+      -m streamlit run app/ui.py"
+    volumes:
+    - ./app:/srv/app
+    - ./resources:/srv/resources
     ports:
       - "5678:5678"
