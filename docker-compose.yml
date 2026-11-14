@@ -12,8 +12,9 @@ services:
       --reasoning-parser=qwen3
       --language-model-only
       ${VLLM_EXTRA_ARGS}
-    environment:
-      - HF_HUB_DISABLE_XET=${HF_HUB_DISABLE_XET}
+    env_file:
+      - path: .env.local
+        required: false
     volumes:
       - hf-cache:/root/.cache/huggingface
     ports:
@@ -34,9 +35,6 @@ services:
       - path: .env
       - path: .env.local
         required: false
-    volumes:
-      - ./app:/srv/app
-      - ./resources:/srv/resources
     ports:
       - "80:8501"
     depends_on:

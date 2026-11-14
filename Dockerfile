@@ -15,4 +15,4 @@ COPY app ./app
 COPY resources ./resources
 
 EXPOSE 8501
-CMD ["streamlit", "run", "app/ui.py", "--server.address=0.0.0.0", "--server.port=8501", "--browser.gatherUsageStats=false"]
+CMD ["streamlit", "run", "app/ui.py"]
