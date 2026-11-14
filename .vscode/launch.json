@@ -10,6 +10,9 @@
       "args": ["examples/*.json", "--out", "output", "--verbose"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
+      // По умолчанию VS Code грузит .env в окружение, и его адрес vLLM (для Docker)
+      // перекрыл бы .env.cli: переменные окружения важнее файлов
+      "envFile": "${workspaceFolder}/.env.cli",
     },
     {
       "name": "Отладка app в Docker",
