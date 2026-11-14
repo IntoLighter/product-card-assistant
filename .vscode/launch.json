@@ -2,6 +2,16 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "CLI: примеры",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app/cli.py",
+      // Маску раскрывает сам CLI; результаты — в output/ (вне git), чтобы не менять examples/output
+      "args": ["examples/*.json", "--out", "output", "--verbose"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+    },
+    {
       "name": "Отладка app в Docker",
       "type": "debugpy",
       "request": "attach",
