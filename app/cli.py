@@ -34,7 +34,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         format="%(levelname)s %(message)s",
     )
 
-    settings = Settings()
+    settings = Settings.for_cli()
     llm = OpenAICompatibleClient(settings)
     status = llm.check_server()
     if not status.ready:

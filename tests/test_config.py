@@ -34,6 +34,12 @@ def test_environment_overrides_dotenv(env):
     assert Settings().base_url == "http://other:9000/v1"
 
 
+def test_cli_uses_host_address():
+    # Интерфейс работает в Docker, консоль — на хосте: адреса vLLM разные
+    assert Settings().base_url == "http://vllm:8000/v1"
+    assert Settings.for_cli().base_url == "http://localhost:8000/v1"
+
+
 def test_values_are_parsed(env):
     settings = Settings(_env_file=None)
 

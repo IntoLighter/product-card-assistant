@@ -34,9 +34,6 @@ services:
       - path: .env
       - path: .env.local
         required: false
-    environment:
-      # Адрес vLLM внутри сети Docker (в .env — адрес для запуска вне Docker)
-      - LLM_BASE_URL=http://vllm:8000/v1
     volumes:
       - ./app:/srv/app
       - ./resources:/srv/resources
