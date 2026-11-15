@@ -11,4 +11,5 @@
             "template": "${composeCommand} ${profileList} -f docker-compose.yml -f docker-compose.debug.yml up ${detached} ${build} ${serviceList}",
         },
     ],
+    "python.envFile": "",
 }
