@@ -1,7 +1,7 @@
 """
 Пакетная генерация карточек из JSON-файлов.
 
-    uv run python app/cli.py examples/*.json --out examples/output
+    uv run python app/cli.py examples/input/*.json --out examples/output
 """
 
 import argparse
@@ -92,7 +92,7 @@ class BatchRunner:
 
 def expand_patterns(patterns: Sequence[str]) -> list[Path]:
     """
-    Раскрывает маски вида examples/*.json.
+    Раскрывает маски вида examples/input/*.json.
 
     PowerShell, в отличие от bash, сам их не раскрывает.
     """

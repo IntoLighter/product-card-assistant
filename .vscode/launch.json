@@ -6,7 +6,7 @@
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/app/cli.py",
-      "args": ["examples/*.json", "--out", "output", "--verbose"],
+      "args": ["examples/input/*.json", "--out", "ignore/output", "--verbose"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
     },

@@ -22,9 +22,9 @@
 
 | Вход | Результат |
 | --- | --- |
-| [Манометр DM 02](examples/manometer_dm02.json) | [Markdown](examples/output/manometer_dm02.md), [JSON](examples/output/manometer_dm02.json) |
-| [Датчик давления ПД-100-ДИ](examples/pressure_sensor.json) | [Markdown](examples/output/pressure_sensor.md), [JSON](examples/output/pressure_sensor.json) |
-| [Термометр ТБ-63 с неполными данными](examples/incomplete_thermometer.json) | генерация не запускается: не указан обязательный для термометров класс точности, сервис сообщает, чего не хватает |
+| [Манометр DM 02](examples/input/manometer_dm02.json) | [Markdown](examples/output/manometer_dm02.md), [JSON](examples/output/manometer_dm02.json) |
+| [Датчик давления ПД-100-ДИ](examples/input/pressure_sensor.json) | [Markdown](examples/output/pressure_sensor.md), [JSON](examples/output/pressure_sensor.json) |
+| [Термометр ТБ-63 с неполными данными](examples/input/incomplete_thermometer.json) | генерация не запускается: не указан обязательный для термометров класс точности, сервис сообщает, чего не хватает |
 
 Данные датчика давления синтетические, производитель указан как «Тестовый производитель».
 
@@ -136,7 +136,7 @@ docker compose ps
 
 1. Заполните форму одним из способов:
    - вкладка **«Шаблон»** — выберите тип прибора, и в таблицу характеристик подставятся обязательные для него поля;
-   - вкладка **«JSON»** — загрузите файл в формате ниже, например из папки [examples](examples/);
+   - вкладка **«JSON»** — загрузите файл в формате ниже, например из папки [examples/input](examples/input/);
    - или просто введите данные вручную.
 2. Нажмите **«Сгенерировать»**. Пока не заполнены название и обязательные для категории характеристики, кнопка неактивна, а под ней написано, чего не хватает.
 3. Результат открывается на вкладках **«Карточка»**, **«Текст»**, **«Markdown»** и **«JSON»**. На каждой — кнопка «Скачать» и кнопка копирования в углу блока.
@@ -165,7 +165,7 @@ docker compose ps
 
 ```bash
 uv sync
-uv run python app/cli.py examples/*.json --out examples/output
+uv run python app/cli.py examples/input/*.json --out examples/output
 ```
 
 Для каждого файла сохраняются `.md` и `.json`. Код возврата: 0 — все карточки готовы, 1 — часть файлов с ошибками, 2 — LLM недоступна.
@@ -207,7 +207,9 @@ app/                    код (корень исходников: импорт�
 resources/
   prompts/              тексты промптов
   templates/            шаблоны категорий приборов
-examples/               входные примеры и результаты (output/)
+examples/
+  input/                входные JSON-файлы
+  output/               карточки, сгенерированные по ним
 tests/                  тесты (pytest), LLM подменяется заглушкой
 docs/                   скриншот для README
 ```
