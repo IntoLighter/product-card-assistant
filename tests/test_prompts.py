@@ -1,13 +1,13 @@
-from core.models import Issue
-from core.prompts import (
+from app.core.models import Issue
+from app.core.prompts import (
     build_fix_messages,
     build_messages,
     system_prompt,
     user_prompt,
 )
-from core.templates import detect_template
-from core.validation import normalize_product
-from factories import manometer, manometer_data, raw_product
+from app.core.templates import detect_template
+from app.core.validation import normalize_product
+from tests.factories import manometer, manometer_data, raw_product
 
 
 def test_system_prompt_has_limits_and_no_placeholders():

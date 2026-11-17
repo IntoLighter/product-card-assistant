@@ -165,7 +165,7 @@ docker compose ps
 
 ```bash
 uv sync
-uv run python app/cli.py examples/input/*.json --out examples/output
+uv run product-cards examples/input/*.json --out examples/output
 ```
 
 Для каждого файла сохраняются `.md` и `.json`. Код возврата: 0 — все карточки готовы, 1 — часть файлов с ошибками, 2 — LLM недоступна.
@@ -190,7 +190,7 @@ uv run python app/cli.py examples/input/*.json --out examples/output
 ## Структура проекта
 
 ```text
-app/                    код (корень исходников: импорты вида from core.models import ...)
+app/                    код (импорты вида from app.core.models import ...)
   ui.py                 веб-интерфейс (Streamlit)
   cli.py                пакетная генерация из консоли
   core/

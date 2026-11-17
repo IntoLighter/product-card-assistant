@@ -1,5 +1,5 @@
-from core.postprocess import fit_description, fit_draft
-from factories import make_draft
+from app.core.postprocess import fit_description, fit_draft
+from tests.factories import make_draft
 
 # 78 символов
 SENTENCE = (

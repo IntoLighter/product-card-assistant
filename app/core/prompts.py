@@ -12,7 +12,7 @@ from string import Template
 
 from openai.types.chat import ChatCompletionMessageParam
 
-from core.models import (
+from app.core.models import (
     COMMERCIAL_ITEMS_MAX,
     DESCRIPTION_MAX_LEN,
     DESCRIPTION_MIN_LEN,
@@ -23,8 +23,8 @@ from core.models import (
     Issue,
     ProductInput,
 )
-from core.resources import prompts_dir
-from core.templates import ProductTemplate
+from app.core.resources import prompts_dir
+from app.core.templates import ProductTemplate
 
 
 def build_messages(

@@ -1,12 +1,12 @@
 import pytest
 
-from core.validation import (
+from app.core.validation import (
     InputError,
     ensure_required_specs,
     normalize_product,
     parse_json,
 )
-from factories import manometer, manometer_data, raw_product
+from tests.factories import manometer, manometer_data, raw_product
 
 
 def test_invalid_json_reports_position():

@@ -3,10 +3,10 @@ import openai
 import pytest
 from openai.types.chat import ChatCompletion
 
-from core.config import Settings
-from core.llm import LLMOutputError, describe_api_error, parse_response
-from core.models import LLMDraft
-from factories import make_draft
+from app.core.config import Settings
+from app.core.llm import LLMOutputError, describe_api_error, parse_response
+from app.core.models import LLMDraft
+from tests.factories import make_draft
 
 SETTINGS = Settings(
     base_url="http://vllm:8000/v1",

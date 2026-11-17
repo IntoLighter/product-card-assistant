@@ -12,8 +12,8 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
-from core.models import ProductInput, RawProduct
-from core.templates import detect_template
+from app.core.models import ProductInput, RawProduct
+from app.core.templates import detect_template
 
 
 class InputError(Exception):

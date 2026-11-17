@@ -3,16 +3,16 @@
 import pytest
 from pydantic import ValidationError
 
-from core.models import RawProduct
-from core.resources import templates_dir
-from core.templates import (
+from app.core.models import RawProduct
+from app.core.resources import templates_dir
+from app.core.templates import (
     OTHER_DEVICE_LABEL,
     ProductTemplate,
     detect_template,
     load_templates,
 )
-from core.validation import ensure_required_specs, normalize_product
-from factories import raw_product
+from app.core.validation import ensure_required_specs, normalize_product
+from tests.factories import raw_product
 
 TEMPLATES = load_templates()
 

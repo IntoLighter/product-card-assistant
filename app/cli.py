@@ -1,7 +1,7 @@
 """
 Пакетная генерация карточек из JSON-файлов.
 
-    uv run python app/cli.py examples/input/*.json --out examples/output
+    uv run product-cards examples/input/*.json --out examples/output
 """
 
 import argparse
@@ -12,12 +12,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.config import Settings
-from core.llm import LLMClient, LLMError, OpenAICompatibleClient
-from core.models import RawProduct
-from core.pipeline import generate_card
-from core.render import to_json, to_markdown
-from core.validation import InputError, parse_json
+from app.core.config import Settings
+from app.core.llm import LLMClient, LLMError, OpenAICompatibleClient
+from app.core.models import RawProduct
+from app.core.pipeline import generate_card
+from app.core.render import to_json, to_markdown
+from app.core.validation import InputError, parse_json
 
 EXIT_OK = 0
 EXIT_HAS_FAILURES = 1

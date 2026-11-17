@@ -1,7 +1,7 @@
-from core.models import MISSING, ProductCard
-from core.pipeline import generate_card
-from core.render import to_json, to_markdown, to_text
-from factories import FakeLLM, make_draft, manometer, manometer_data, raw_product
+from app.core.models import MISSING, ProductCard
+from app.core.pipeline import generate_card
+from app.core.render import to_json, to_markdown, to_text
+from tests.factories import FakeLLM, make_draft, manometer, manometer_data, raw_product
 
 
 def build_card(*drafts):

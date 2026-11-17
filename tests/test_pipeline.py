@@ -1,10 +1,10 @@
 import pytest
 
-from core.llm import LLMError, LLMOutputError
-from core.models import MISSING
-from core.pipeline import generate_card
-from core.validation import InputError
-from factories import FakeLLM, make_draft, manometer, manometer_data, raw_product
+from app.core.llm import LLMError, LLMOutputError
+from app.core.models import MISSING
+from app.core.pipeline import generate_card
+from app.core.validation import InputError
+from tests.factories import FakeLLM, make_draft, manometer, manometer_data, raw_product
 
 
 def test_card_combines_input_and_draft():

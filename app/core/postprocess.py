@@ -6,7 +6,7 @@
 
 import re
 
-from core.models import DESCRIPTION_MAX_LEN, DESCRIPTION_MIN_LEN, LLMDraft
+from app.core.models import DESCRIPTION_MAX_LEN, DESCRIPTION_MIN_LEN, LLMDraft
 
 SENTENCE_BREAK = re.compile(r"(?<=[.!?…])\s+")
 

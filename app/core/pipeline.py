@@ -15,9 +15,9 @@ from dataclasses import dataclass, replace
 
 from openai.types.chat import ChatCompletionMessageParam
 
-from core.checks import check_draft
-from core.llm import LLMClient, LLMError, LLMOutputError
-from core.models import (
+from app.core.checks import check_draft
+from app.core.llm import LLMClient, LLMError, LLMOutputError
+from app.core.models import (
     MISSING,
     CardMeta,
     Issue,
@@ -27,10 +27,10 @@ from core.models import (
     RawProduct,
     SpecRow,
 )
-from core.postprocess import fit_draft
-from core.prompts import build_fix_messages, build_messages
-from core.templates import detect_template
-from core.validation import ensure_required_specs, normalize_product
+from app.core.postprocess import fit_draft
+from app.core.prompts import build_fix_messages, build_messages
+from app.core.templates import detect_template
+from app.core.validation import ensure_required_specs, normalize_product
 
 log = logging.getLogger(__name__)
 

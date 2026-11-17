@@ -1,3 +1,9 @@
+# Проект ставится в своё окружение (uv sync, режим редактирования),
+# поэтому пакет app импортируется при любом способе запуска
+[build-system]
+build-backend = "uv_build"
+requires = [ "uv-build>=0.9.16,<0.10" ]
+
 [project]
 name = "product-card-assistant"
 version = "0.1.0"
@@ -10,6 +16,10 @@ dependencies = [
     "streamlit>=1.66.1",
 ]
 
+# Консольный режим: uv run product-cards examples/input/*.json
+[project.scripts]
+product-cards = "app.cli:main"
+
 [dependency-groups]
 dev = [
     "prek>=0.5.10",
@@ -21,8 +31,10 @@ dev = [
     "ty>=0.0.96",
 ]
 
-[tool.ruff]
-src = [ "app", "tests" ]
+[tool.uv.build-backend]
+# Пакет — папка app в корне проекта, а не src/<имя проекта>
+module-name = "app"
+module-root = ""
 
 [tool.ruff.lint.per-file-ignores]
 "app/cli.py" = [ "T201" ]
@@ -64,12 +76,9 @@ generate_python_version_classifiers = false
 table_format = "long"
 sub_table_spacing = "\n"
 
-[tool.ty.environment]
-root = [ "app", "tests" ]
-
 [tool.pytest.ini_options]
 testpaths = [ "tests" ]
-pythonpath = [ "app" ]
+addopts = [ "--import-mode=importlib" ]
 disable_test_id_escaping_and_forfeit_all_rights_to_community_support = true
 
 [tool.rumdl]

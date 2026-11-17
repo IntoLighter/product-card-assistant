@@ -15,7 +15,7 @@
 import re
 from typing import NamedTuple
 
-from core.models import (
+from app.core.models import (
     DESCRIPTION_MAX_LEN,
     DESCRIPTION_MIN_LEN,
     DESCRIPTION_TARGET_LEN,

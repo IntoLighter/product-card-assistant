@@ -1,7 +1,7 @@
 import json
 
-from cli import BatchRunner, expand_patterns
-from factories import FakeLLM, make_draft, manometer_data
+from app.cli import BatchRunner, expand_patterns
+from tests.factories import FakeLLM, make_draft, manometer_data
 
 
 def test_expand_patterns(tmp_path):

@@ -1,9 +1,9 @@
 import pytest
 
-from core.checks import check_draft
-from core.models import Commercial
-from core.validation import normalize_product
-from factories import (
+from app.core.checks import check_draft
+from app.core.models import Commercial
+from app.core.validation import normalize_product
+from tests.factories import (
     GOOD_DESCRIPTION,
     make_draft,
     manometer,

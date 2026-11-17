@@ -39,8 +39,8 @@ from functools import cache
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.models import ProductInput, RawProduct
-from core.resources import templates_dir
+from app.core.models import ProductInput, RawProduct
+from app.core.resources import templates_dir
 
 # Подпись шаблона без названия: для приборов, которых нет среди известных типов
 OTHER_DEVICE_LABEL = "Другой прибор"

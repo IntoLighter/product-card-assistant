@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from core.config import Settings
+from app.core.config import Settings
 
 ENV = {
     "LLM_BASE_URL": "http://vllm:8000/v1",

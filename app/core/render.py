@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 
-from core.models import ProductCard
+from app.core.models import ProductCard
 
 TITLE_HEADING = "SEO-заголовок"
 DESCRIPTION_HEADING = "SEO-описание"

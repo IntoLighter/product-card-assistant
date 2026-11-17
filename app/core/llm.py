@@ -13,7 +13,7 @@ import openai
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import BaseModel, ValidationError
 
-from core.config import Settings
+from app.core.config import Settings
 
 MAX_COMPLETION_TOKENS = 2048
 HEALTH_CHECK_TIMEOUT_SECONDS = 3

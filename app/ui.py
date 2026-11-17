@@ -10,13 +10,13 @@ from dataclasses import dataclass
 
 import streamlit as st
 
-from core.config import Settings
-from core.llm import LLMError, OpenAICompatibleClient
-from core.models import ProductCard, RawProduct
-from core.pipeline import generate_card
-from core.render import to_json, to_markdown, to_text
-from core.templates import load_templates
-from core.validation import (
+from app.core.config import Settings
+from app.core.llm import LLMError, OpenAICompatibleClient
+from app.core.models import ProductCard, RawProduct
+from app.core.pipeline import generate_card
+from app.core.render import to_json, to_markdown, to_text
+from app.core.templates import load_templates
+from app.core.validation import (
     InputError,
     ensure_required_specs,
     normalize_product,
