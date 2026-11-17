@@ -1,7 +1,7 @@
 from core.postprocess import fit_description, fit_draft
 from factories import make_draft
 
-# 79 символов
+# 78 символов
 SENTENCE = (
     "Прибор показывает избыточное давление на месте установки и не требует питания."
 )
@@ -21,14 +21,14 @@ def test_long_text_trimmed_by_whole_sentences():
     fitted = fit_description(text)
     assert 800 <= len(fitted) <= 1200
     assert fitted.endswith(SENTENCE)
-    assert text.startswith(fitted[:500])
+    assert text.startswith(fitted)  # обрезан только конец, начало не тронуто
 
 
 def test_empty_paragraph_removed_after_trim():
-    text = paragraphs(3, 4) + "\n\n" + SENTENCE  # последний абзац из одного предложения
-    fitted = fit_description(text)
-    assert "\n\n\n" not in fitted
-    assert not fitted.endswith("\n")
+    body = paragraphs(3, 5)  # ~1190 символов
+    # ~1270 символов: обрезка уберёт единственное предложение последнего абзаца
+    text = body + "\n\n" + SENTENCE
+    assert fit_description(text) == body
 
 
 def test_not_trimmed_below_minimum():
